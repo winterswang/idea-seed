@@ -32,8 +32,17 @@ PROVIDERS = {
     },
     "aliyun": {
         "api_key": os.environ.get("ALIYUN_API_KEY", ""),
-        "base_url": os.environ.get("ALIYUN_BASE_URL", "https://coding.dashscope.aliyuncs.com/apps/anthropic"),
+        "base_url": os.environ.get(
+            "ALIYUN_BASE_URL", "https://coding.dashscope.aliyuncs.com/apps/anthropic"
+        ),
         "model": os.environ.get("ALIYUN_MODEL", "qwen3.6-plus"),
+    },
+    "bytedance": {
+        "api_key": os.environ.get("BYTEDANCE_API_KEY", ""),
+        "base_url": os.environ.get(
+            "BYTEDANCE_BASE_URL", "https://ark.cn-beijing.volces.com/api/coding"
+        ),
+        "model": os.environ.get("BYTEDANCE_MODEL", "kimi-k2.5"),
     },
 }
 
