@@ -20,13 +20,51 @@ TEAM_DIR = WORKDIR / ".team"
 INBOX_DIR = TEAM_DIR / "inbox"
 
 
-# Model configuration
-MODEL_ID = os.environ.get("MODEL_ID", "minimax2.7")
+# Provider selection ("minimax" or "aliyun")
+ACTIVE_PROVIDER = os.environ.get("PROVIDER", "minimax")
+
+# Provider configurations
+PROVIDERS = {
+    "minimax": {
+        "api_key": os.environ.get("MINIMAX_API_KEY", ""),
+        "base_url": os.environ.get("MINIMAX_BASE_URL", "https://api.minimax.chat"),
+        "model": os.environ.get("MINIMAX_MODEL", "minimax2.7"),
+    },
+    "aliyun": {
+        "api_key": os.environ.get("ALIYUN_API_KEY", ""),
+        "base_url": os.environ.get("ALIYUN_BASE_URL", "https://coding.dashscope.aliyuncs.com/apps/anthropic"),
+        "model": os.environ.get("ALIYUN_MODEL", "qwen3.6-plus"),
+    },
+}
+
+
+def get_provider_config() -> dict:
+    """Get the active provider's configuration."""
+    return PROVIDERS[ACTIVE_PROVIDER]
+
+
+def get_api_key() -> str:
+    """Get API key for active provider."""
+    return get_provider_config()["api_key"]
+
+
+def get_base_url() -> str:
+    """Get base URL for active provider."""
+    return get_provider_config()["base_url"]
+
+
+def get_model() -> str:
+    """Get model ID for active provider."""
+    return get_provider_config()["model"]
+
+
+# Backwards compatibility - MODEL_ID now points to active provider's model
+MODEL_ID = get_model()
 MAX_TOKENS = int(os.environ.get("MAX_TOKENS", "32000"))
 
-# MiniMax API
-MINIMAX_API_KEY = os.environ.get("MINIMAX_API_KEY", "")
-MINIMAX_BASE_URL = os.environ.get("MINIMAX_BASE_URL", "https://api.minimax.chat")
+# Legacy names (kept for compatibility, but now delegated to active provider)
+MINIMAX_API_KEY = get_api_key()
+MINIMAX_BASE_URL = get_base_url()
 
 # Context management
 TOKEN_THRESHOLD = int(os.environ.get("TOKEN_THRESHOLD", "150000"))

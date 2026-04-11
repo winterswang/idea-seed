@@ -2,15 +2,16 @@
 
 from anthropic import Anthropic
 
-from agent.config import MODEL_ID, MAX_TOKENS
+from agent.config import MODEL_ID, MAX_TOKENS, get_api_key, get_base_url
 from tools.base import TOOL_HANDLERS, TOOL_SCHEMAS
 
 
 def create_client() -> Anthropic:
-    """Create Anthropic client."""
-    from agent.config import MINIMAX_BASE_URL
-
-    return Anthropic(base_url=MINIMAX_BASE_URL)
+    """Create Anthropic client with active provider's configuration."""
+    return Anthropic(
+        base_url=get_base_url(),
+        api_key=get_api_key(),
+    )
 
 
 def agent_loop(
