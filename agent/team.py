@@ -127,7 +127,6 @@ class TeammateManager:
             f"Work on tasks assigned to you. Use send_message to communicate results."
         )
 
-
         messages = [{"role": "user", "content": prompt}]
         tools = self._teammate_tools()
         should_exit = False
@@ -163,11 +162,13 @@ class TeammateManager:
                 if block.type == "tool_use":
                     output = self._exec(name, block.name, block.input)
                     print(f"  [{name}] {block.name}: {str(output)[:120]}")
-                    results.append({
-                        "type": "tool_result",
-                        "tool_use_id": block.id,
-                        "content": str(output),
-                    })
+                    results.append(
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": block.id,
+                            "content": str(output),
+                        }
+                    )
                     if block.name == "shutdown_response" and block.input.get("approve"):
                         should_exit = True
 
@@ -191,7 +192,9 @@ class TeammateManager:
         if tool_name == "edit_file":
             return run_edit(args["path"], args["old_text"], args["new_text"])
         if tool_name == "send_message":
-            return BUS.send(sender, args["to"], args["content"], args.get("msg_type", "message"))
+            return BUS.send(
+                sender, args["to"], args["content"], args.get("msg_type", "message")
+            )
         if tool_name == "read_inbox":
             return json.dumps(BUS.read_inbox(sender), indent=2)
 

@@ -34,22 +34,21 @@ def safe_path(p: str) -> Path:
     return path
 
 
-
 def run_bash(command: str) -> str:
     """Execute shell command with safety checks."""
     # Block dangerous patterns for remote code execution and privilege escalation
     dangerous_patterns = [
-        r'rm\s+-rf\s+/',  # rm -rf /
-        r'sudo',  # sudo
-        r'shutdown',  # shutdown
-        r'reboot',  # reboot
-        r'>\s*/dev/',  # > /dev/
-        r'curl.*\|',  # curl ... | (pipe to any command)
-        r'curl.*&&\s*(bash|sh)',  # curl ... && bash/sh
-        r'curl.*;\s*(bash|sh)',  # curl ... ; bash/sh
-        r'wget.*\|',  # wget ... | (pipe to any command)
-        r'wget.*&&\s*(bash|sh)',  # wget ... && bash/sh
-        r'wget.*;\s*(bash|sh)',  # wget ... ; bash/sh
+        r"rm\s+-rf\s+/",  # rm -rf /
+        r"sudo",  # sudo
+        r"shutdown",  # shutdown
+        r"reboot",  # reboot
+        r">\s*/dev/",  # > /dev/
+        r"curl.*\|",  # curl ... | (pipe to any command)
+        r"curl.*&&\s*(bash|sh)",  # curl ... && bash/sh
+        r"curl.*;\s*(bash|sh)",  # curl ... ; bash/sh
+        r"wget.*\|",  # wget ... | (pipe to any command)
+        r"wget.*&&\s*(bash|sh)",  # wget ... && bash/sh
+        r"wget.*;\s*(bash|sh)",  # wget ... ; bash/sh
     ]
     if any(re.search(pattern, command) for pattern in dangerous_patterns):
         return "Error: Dangerous command blocked"

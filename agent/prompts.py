@@ -9,7 +9,9 @@ from agent.constants import ROLE_SYSTEM
 # BUILDER PROMPTS
 # ============================================================================
 
-BUILDER_REQ_SYSTEM = ROLE_SYSTEM["builder_req"] + """
+BUILDER_REQ_SYSTEM = (
+    ROLE_SYSTEM["builder_req"]
+    + """
 
 You generate structured requirements documents optimized for Claude Code development.
 
@@ -22,6 +24,7 @@ Key requirements:
 - Data entities must be clearly defined with types
 - Non-functional requirements (performance, security, availability) must be specified
 """
+)
 
 BUILDER_REQ_PROMPT = """
 ## Original Seed Idea (DO NOT MODIFY)
@@ -55,7 +58,9 @@ Write the COMPLETE requirements.md content to the file at this path:
 Use the write_file tool to write the complete content directly. The file should start with "# 需求文档：" followed by the ORIGINAL seed idea in a blockquote, then include every section in full detail. Make sure the content is comprehensive (hundreds of lines).
 """
 
-BUILDER_DESIGN_SYSTEM = ROLE_SYSTEM["builder_design"] + """
+BUILDER_DESIGN_SYSTEM = (
+    ROLE_SYSTEM["builder_design"]
+    + """
 
 You generate structured technical design documents optimized for Claude Code development.
 
@@ -69,6 +74,7 @@ Key requirements:
 - Development tasks with dependencies
 - Configuration management approach
 """
+)
 
 BUILDER_DESIGN_PROMPT = """
 ## Requirements Document
@@ -104,7 +110,9 @@ Use the write_file tool to write the complete content directly. Start with "# �
 # REVIEWER PROMPTS
 # ============================================================================
 
-REVIEWER_REQ_SYSTEM = ROLE_SYSTEM["reviewer_req"] + """
+REVIEWER_REQ_SYSTEM = (
+    ROLE_SYSTEM["reviewer_req"]
+    + """
 
 You review requirements documents for:
 1. Intent alignment - does it cover the seed idea's core?
@@ -114,6 +122,7 @@ You review requirements documents for:
 
 Provide actionable feedback that helps improve the document.
 """
+)
 
 REVIEWER_REQ_PROMPT = """
 ## Original Seed Idea (for alignment check)
@@ -166,7 +175,9 @@ REVIEWER_REQ_PROMPT = """
 ```
 """
 
-REVIEWER_DESIGN_SYSTEM = ROLE_SYSTEM["reviewer_design"] + """
+REVIEWER_DESIGN_SYSTEM = (
+    ROLE_SYSTEM["reviewer_design"]
+    + """
 
 You review technical design documents for:
 1. Completeness - does it cover all requirements?
@@ -176,6 +187,7 @@ You review technical design documents for:
 
 Provide actionable feedback that helps improve the document.
 """
+)
 
 REVIEWER_DESIGN_PROMPT = """
 ## Original Seed Idea
@@ -237,7 +249,9 @@ REVIEWER_DESIGN_PROMPT = """
 # ALIGNER PROMPTS
 # ============================================================================
 
-ALIGNER_SYSTEM = ROLE_SYSTEM["aligner"] + """
+ALIGNER_SYSTEM = (
+    ROLE_SYSTEM["aligner"]
+    + """
 
 You ensure the iterative process stays aligned with the seed idea.
 
@@ -248,6 +262,7 @@ Check at each iteration:
 
 IMPORTANT: Do NOT read any files. Only use the seed idea and progress summary provided.
 """
+)
 
 ALIGNER_PROMPT = """
 ## CRITICAL: Original Seed Idea (THE ONLY SOURCE OF TRUTH)

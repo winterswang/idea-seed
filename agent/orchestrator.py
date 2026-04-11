@@ -46,20 +46,86 @@ def slugify(text: str) -> str:
         Short directory-friendly name
     """
     # Extract Chinese words (2-4 characters)
-    chinese_words = re.findall(r'[\u4e00-\u9fff]{2,4}', text)
+    chinese_words = re.findall(r"[\u4e00-\u9fff]{2,4}", text)
 
     # Extract English words/phrases
-    english_words = re.findall(r'[a-zA-Z]{2,10}', text.lower())
+    english_words = re.findall(r"[a-zA-Z]{2,10}", text.lower())
 
     # Filter out common stop words for both
-    cn_stop = {'的', '是', '在', '和', '了', '我', '你', '他', '她', '它', '们',
-                '这', '那', '有', '个', '们', '与', '及', '或', '等', '要', '会',
-                '对', '把', '被', '从', '到', '给', '用', '为', '以', '及', '上',
-                '下', '中', '内', '外', '后', '前', '里', '还', '也', '很', '都'}
+    cn_stop = {
+        "的",
+        "是",
+        "在",
+        "和",
+        "了",
+        "我",
+        "你",
+        "他",
+        "她",
+        "它",
+        "们",
+        "这",
+        "那",
+        "有",
+        "个",
+        "们",
+        "与",
+        "及",
+        "或",
+        "等",
+        "要",
+        "会",
+        "对",
+        "把",
+        "被",
+        "从",
+        "到",
+        "给",
+        "用",
+        "为",
+        "以",
+        "及",
+        "上",
+        "下",
+        "中",
+        "内",
+        "外",
+        "后",
+        "前",
+        "里",
+        "还",
+        "也",
+        "很",
+        "都",
+    }
 
-    en_stop = {'the', 'and', 'for', 'with', 'from', 'this', 'that', 'these',
-               'those', 'are', 'was', 'were', 'been', 'have', 'has', 'had',
-               'but', 'not', 'you', 'your', 'can', 'will', 'all', 'one', 'two'}
+    en_stop = {
+        "the",
+        "and",
+        "for",
+        "with",
+        "from",
+        "this",
+        "that",
+        "these",
+        "those",
+        "are",
+        "was",
+        "were",
+        "been",
+        "have",
+        "has",
+        "had",
+        "but",
+        "not",
+        "you",
+        "your",
+        "can",
+        "will",
+        "all",
+        "one",
+        "two",
+    }
 
     chinese_words = [w for w in chinese_words if w not in cn_stop]
     english_words = [w for w in english_words if w not in en_stop and len(w) > 2]
@@ -69,8 +135,8 @@ def slugify(text: str) -> str:
 
     # If no keywords found, fallback to simple truncation
     if not keywords:
-        slug = re.sub(r'[^\w\u4e00-\u9fff-]', '', text)
-        slug = re.sub(r'[-\s]+', '-', slug)
+        slug = re.sub(r"[^\w\u4e00-\u9fff-]", "", text)
+        slug = re.sub(r"[-\s]+", "-", slug)
         return slug[:20]
 
     # Take top 3-4 keywords
@@ -79,7 +145,7 @@ def slugify(text: str) -> str:
     # Calculate 4-char hash from lowercase text for uniqueness (case-insensitive)
     hash_suffix = hashlib.md5(text.lower().encode()).hexdigest()[:4]
 
-    return '-'.join(keywords) + '-' + hash_suffix
+    return "-".join(keywords) + "-" + hash_suffix
 
 
 def check_approval(review_result: str) -> bool:
@@ -102,15 +168,15 @@ def check_approval(review_result: str) -> bool:
     # Priority 1: Check for negation patterns that override approval
     # These always result in rejection
     negation_patterns = [
-        'not ',       # English negation prefix (not approved, not fully approved, etc.)
-        '需修改',      # Chinese: needs modification
-        'rejected',  # English: rejected
+        "not ",  # English negation prefix (not approved, not fully approved, etc.)
+        "需修改",  # Chinese: needs modification
+        "rejected",  # English: rejected
     ]
     for pattern in negation_patterns:
         if pattern.lower() in result_lower:
             # Special case: "not" needs to be followed by "approved"
-            if pattern == 'not ':
-                if 'approved' in result_lower:
+            if pattern == "not ":
+                if "approved" in result_lower:
                     return False  # "not ... approved" is rejection
                 # "not" without "approved" - ignore, might be "not needed" etc.
                 continue
@@ -118,9 +184,9 @@ def check_approval(review_result: str) -> bool:
 
     # Priority 2: Check for approval indicators
     approval_patterns = [
-        '评审结果',    # Has explicit verdict line
-        'approved',   # English approval (not negated)
-        '通过',       # Chinese approval (anywhere)
+        "评审结果",  # Has explicit verdict line
+        "approved",  # English approval (not negated)
+        "通过",  # Chinese approval (anywhere)
     ]
     for pattern in approval_patterns:
         if pattern.lower() in result_lower:
@@ -156,14 +222,23 @@ class Logger:
 class Orchestrator:
     """Main orchestrator for iterative document building."""
 
-    def __init__(self, seed: str, resume: bool = False) -> None:
+    def __init__(
+        self,
+        seed: str,
+        resume: bool = False,
+        max_rounds: int | None = None,
+    ) -> None:
         """
         Initialize orchestrator.
 
         Args:
             seed: The original seed idea
             resume: Whether to resume from saved state
+            max_rounds: Maximum rounds per phase (default: 10)
         """
+        from agent.config import MAX_ROUNDS
+
+        self.max_rounds = max_rounds if max_rounds is not None else MAX_ROUNDS
         # Create project directory based on seed
         self.project_slug = slugify(seed)
         self.project_dir = WORKDIR / "projects" / self.project_slug
@@ -201,16 +276,16 @@ class Orchestrator:
             self.logger.log(f"Started new session: {self.state.session_id}")
 
         self.logger.log("")
-        self.logger.log(f"{'='*60}")
+        self.logger.log(f"{'=' * 60}")
         self.logger.log("  IDEA SEED - Iterative Document Builder")
-        self.logger.log(f"{'='*60}")
+        self.logger.log(f"{'=' * 60}")
         self.logger.log(f"  🌱 Seed: {self.state.seed}")
         self.logger.log(f"  📁 Project: {self.project_dir}")
         self.logger.log(f"  📋 Session: {self.state.session_id}")
         self.logger.log(f"  📍 Phase: {self.state.phase.upper()}")
-        self.logger.log("  🔄 Max Rounds: 10")
+        self.logger.log(f"  🔄 Max Rounds: {self.max_rounds}")
         self.logger.log("  🎯 Convergence: 2 consecutive approvals needed")
-        self.logger.log(f"{'='*60}")
+        self.logger.log(f"{'=' * 60}")
         self.logger.log("")
 
     @property
@@ -255,16 +330,20 @@ class Orchestrator:
 
         # Calculate progress toward convergence
         review_count = len(self.state.req_review_history)
-        recent_approved = sum(1 for r in self.state.req_review_history[-2:]) if review_count >= 1 else 0
-        progress = f"[Round {self.state.req_round}/10] [Recent approvals: {recent_approved}/2]"
+        recent_approved = (
+            sum(1 for r in self.state.req_review_history[-2:])
+            if review_count >= 1
+            else 0
+        )
+        progress = f"[Round {self.state.req_round}/{self.max_rounds}] [Recent approvals: {recent_approved}/2]"
 
         self.logger.log("")
-        self.logger.log(f"{'='*60}")
+        self.logger.log(f"{'=' * 60}")
         self.logger.log(f"  REQUIREMENTS PHASE - Round {self.state.req_round}")
         self.logger.log(f"  Progress: {progress}")
-        self.logger.log(f"{'='*60}")
+        self.logger.log(f"{'=' * 60}")
 
-        if self.state.req_round > 10:
+        if self.state.req_round > self.max_rounds:
             self.logger.log("Max rounds reached, forcing convergence", "WARN")
             self.state.req_converged = True
             self.state.phase = PHASE_TECH_DESIGN
@@ -289,8 +368,12 @@ class Orchestrator:
         # Read back the file content that subagent wrote
         requirements = self._read_doc(round_req_path)
         req_lines = requirements.count("\n")
-        self.logger.log(f"      → Generated {req_lines} lines, {len(requirements)} chars in {build_time:.1f}s")
-        self.logger.log(f"      → Written to: rounds/requirements/round-{self.state.req_round}.md")
+        self.logger.log(
+            f"      → Generated {req_lines} lines, {len(requirements)} chars in {build_time:.1f}s"
+        )
+        self.logger.log(
+            f"      → Written to: rounds/requirements/round-{self.state.req_round}.md"
+        )
 
         # Also update latest copy
         self._write_doc(self.requirements_path, requirements)
@@ -306,7 +389,9 @@ class Orchestrator:
         self.logger.log(f"      → Review: {approved}")
 
         # Save round-specific review report
-        round_review_path = self.review_rounds_dir / f"requirements-round-{self.state.req_round}.md"
+        round_review_path = (
+            self.review_rounds_dir / f"requirements-round-{self.state.req_round}.md"
+        )
         review_content = self._format_review_report(
             phase="Requirements",
             round_num=self.state.req_round,
@@ -316,7 +401,9 @@ class Orchestrator:
             document=requirements,
         )
         self._write_doc(round_review_path, review_content)
-        self.logger.log(f"      → Review saved to: rounds/reviews/requirements-round-{self.state.req_round}.md")
+        self.logger.log(
+            f"      → Review saved to: rounds/reviews/requirements-round-{self.state.req_round}.md"
+        )
 
         if review_result["feedback"]:
             fb_preview = review_result["feedback"][:300].replace("\n", " ")
@@ -330,7 +417,9 @@ class Orchestrator:
             self.state.phase = PHASE_TECH_DESIGN
         else:
             self.logger.log("")
-            self.logger.log(f"  → Not converged yet. ({recent_approved + (1 if review_result['approved'] else 0)}/2 recent approvals needed)")
+            self.logger.log(
+                f"  → Not converged yet. ({recent_approved + (1 if review_result['approved'] else 0)}/2 recent approvals needed)"
+            )
 
     def _run_design_phase(self) -> None:
         """Run one round of technical design building."""
@@ -338,16 +427,20 @@ class Orchestrator:
 
         # Calculate progress toward convergence
         review_count = len(self.state.design_review_history)
-        recent_approved = sum(1 for r in self.state.design_review_history[-2:]) if review_count >= 1 else 0
-        progress = f"[Round {self.state.design_round}/10] [Recent approvals: {recent_approved}/2]"
+        recent_approved = (
+            sum(1 for r in self.state.design_review_history[-2:])
+            if review_count >= 1
+            else 0
+        )
+        progress = f"[Round {self.state.design_round}/{self.max_rounds}] [Recent approvals: {recent_approved}/2]"
 
         self.logger.log("")
-        self.logger.log(f"{'='*60}")
+        self.logger.log(f"{'=' * 60}")
         self.logger.log(f"  TECH DESIGN PHASE - Round {self.state.design_round}")
         self.logger.log(f"  Progress: {progress}")
-        self.logger.log(f"{'='*60}")
+        self.logger.log(f"{'=' * 60}")
 
-        if self.state.design_round > 10:
+        if self.state.design_round > self.max_rounds:
             self.logger.log("Max rounds reached, forcing convergence", "WARN")
             self.state.design_converged = True
             self.state.phase = PHASE_DONE
@@ -367,7 +460,9 @@ class Orchestrator:
         self.logger.log(f"      → Loaded {req_lines} lines from requirements.md")
 
         # File path for this round's design
-        round_design_path = self.design_rounds_dir / f"round-{self.state.design_round}.md"
+        round_design_path = (
+            self.design_rounds_dir / f"round-{self.state.design_round}.md"
+        )
 
         # Run Builder - subagent writes directly to file
         self.logger.log("  [2/3] Running Design Builder...")
@@ -378,8 +473,12 @@ class Orchestrator:
         # Read back the file content that subagent wrote
         tech_design = self._read_doc(round_design_path)
         design_lines = tech_design.count("\n")
-        self.logger.log(f"      → Generated {design_lines} lines, {len(tech_design)} chars in {build_time:.1f}s")
-        self.logger.log(f"      → Written to: rounds/designs/round-{self.state.design_round}.md")
+        self.logger.log(
+            f"      → Generated {design_lines} lines, {len(tech_design)} chars in {build_time:.1f}s"
+        )
+        self.logger.log(
+            f"      → Written to: rounds/designs/round-{self.state.design_round}.md"
+        )
 
         # Also update latest copy
         self._write_doc(self.tech_design_path, tech_design)
@@ -394,7 +493,9 @@ class Orchestrator:
         self.logger.log(f"      → Review: {approved}")
 
         # Save round-specific review report
-        round_review_path = self.review_rounds_dir / f"design-round-{self.state.design_round}.md"
+        round_review_path = (
+            self.review_rounds_dir / f"design-round-{self.state.design_round}.md"
+        )
         review_content = self._format_review_report(
             phase="Tech Design",
             round_num=self.state.design_round,
@@ -404,7 +505,9 @@ class Orchestrator:
             document=tech_design,
         )
         self._write_doc(round_review_path, review_content)
-        self.logger.log(f"      → Review saved to: rounds/reviews/design-round-{self.state.design_round}.md")
+        self.logger.log(
+            f"      → Review saved to: rounds/reviews/design-round-{self.state.design_round}.md"
+        )
 
         if review_result["feedback"]:
             fb_preview = review_result["feedback"][:300].replace("\n", " ")
@@ -418,7 +521,9 @@ class Orchestrator:
             self.state.phase = PHASE_DONE
         else:
             self.logger.log("")
-            self.logger.log(f"  → Not converged yet. ({recent_approved + (1 if review_result['approved'] else 0)}/2 recent approvals needed)")
+            self.logger.log(
+                f"  → Not converged yet. ({recent_approved + (1 if review_result['approved'] else 0)}/2 recent approvals needed)"
+            )
 
     def _check_req_convergence(self) -> bool:
         """Check if requirements phase has converged."""
@@ -463,7 +568,9 @@ class Orchestrator:
         # Subagent writes directly to file, returns confirmation message
         run_subagent(prompt=prompt, system=BUILDER_REQ_SYSTEM)
 
-    def _builder_design_build(self, requirements: str, feedback: str | None, design_path: str) -> None:
+    def _builder_design_build(
+        self, requirements: str, feedback: str | None, design_path: str
+    ) -> None:
         """Run technical design builder - writes directly to file."""
         # Feedback is already just the previous round's feedback (not cumulative)
         # passed in from _run_design_phase
@@ -527,7 +634,9 @@ class Orchestrator:
         try:
             path.resolve().relative_to(self.project_dir.resolve())
         except ValueError:
-            raise ValueError(f"Path {path} escapes project directory {self.project_dir}")
+            raise ValueError(
+                f"Path {path} escapes project directory {self.project_dir}"
+            )
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content)
 
@@ -538,9 +647,9 @@ class Orchestrator:
     def _output_final_docs(self) -> None:
         """Output final documents summary."""
         self.logger.log("")
-        self.logger.log(f"{'='*60}")
+        self.logger.log(f"{'=' * 60}")
         self.logger.log("  DOCUMENT BUILDING COMPLETE")
-        self.logger.log(f"{'='*60}")
+        self.logger.log(f"{'=' * 60}")
         self.logger.log(f"  Seed Idea: {self.state.seed}")
         self.logger.log(f"  Requirements Rounds: {self.state.req_round}")
         self.logger.log(f"  Design Rounds: {self.state.design_round}")
@@ -548,8 +657,12 @@ class Orchestrator:
         # Show convergence status
         self.logger.log("")
         self.logger.log("  Convergence Status:")
-        self.logger.log(f"    Requirements: {'✅ Converged' if self.state.req_converged else '⚠️ Forced (max rounds)'}")
-        self.logger.log(f"    Tech Design:  {'✅ Converged' if self.state.design_converged else '⚠️ Forced (max rounds)'}")
+        self.logger.log(
+            f"    Requirements: {'✅ Converged' if self.state.req_converged else '⚠️ Forced (max rounds)'}"
+        )
+        self.logger.log(
+            f"    Tech Design:  {'✅ Converged' if self.state.design_converged else '⚠️ Forced (max rounds)'}"
+        )
 
         # Show review history summary
         if self.state.req_review_history:
@@ -586,9 +699,9 @@ class Orchestrator:
         self.logger.log(f"    📋 {self.summary_path}")
 
         self.logger.log("")
-        self.logger.log(f"{'='*60}")
+        self.logger.log(f"{'=' * 60}")
         self.logger.log("  COMPLETE")
-        self.logger.log(f"{'='*60}")
+        self.logger.log(f"{'=' * 60}")
 
     def _format_review_report(
         self,
@@ -621,14 +734,16 @@ class Orchestrator:
         else:
             lines.append("_（无反馈 - 文档已通过评审）_")
 
-        lines.extend([
-            "",
-            "## 评审文档内容",
-            "",
-            "---",
-            document,
-            "---",
-        ])
+        lines.extend(
+            [
+                "",
+                "## 评审文档内容",
+                "",
+                "---",
+                document,
+                "---",
+            ]
+        )
 
         return "\n".join(lines)
 
@@ -659,45 +774,55 @@ class Orchestrator:
             lines.append("### 需求评审")
             for r in self.state.req_review_history:
                 status = "✅" if r["approved"] else "❌"
-                lines.append(f"- Round {r['round']}: {status} → `rounds/reviews/requirements-round-{r['round']}.md`")
+                lines.append(
+                    f"- Round {r['round']}: {status} → `rounds/reviews/requirements-round-{r['round']}.md`"
+                )
             lines.append("")
 
         if self.state.design_review_history:
             lines.append("### 方案评审")
             for r in self.state.design_review_history:
                 status = "✅" if r["approved"] else "❌"
-                lines.append(f"- Round {r['round']}: {status} → `rounds/reviews/design-round-{r['round']}.md`")
+                lines.append(
+                    f"- Round {r['round']}: {status} → `rounds/reviews/design-round-{r['round']}.md`"
+                )
             lines.append("")
 
-        lines.extend([
-            "## 产出文档结构",
-            "",
-            "```",
-            f"projects/{self.project_slug}/",
-            "├── rounds/",
-            "│   ├── requirements/",
-        ])
+        lines.extend(
+            [
+                "## 产出文档结构",
+                "",
+                "```",
+                f"projects/{self.project_slug}/",
+                "├── rounds/",
+                "│   ├── requirements/",
+            ]
+        )
 
         for i in range(1, self.state.req_round + 1):
             lines.append(f"│   │   └── round-{i}.md")
 
-        lines.extend([
-            "│   ├── designs/",
-        ])
+        lines.extend(
+            [
+                "│   ├── designs/",
+            ]
+        )
 
         for i in range(1, self.state.design_round + 1):
             lines.append(f"│   │   └── round-{i}.md")
 
-        lines.extend([
-            "│   └── reviews/",
-            "│       ├── requirements-round-1.md",
-            "│       └── design-round-1.md",
-            "├── requirements.md  (latest)",
-            "├── tech-design.md   (latest)",
-            "├── session.json",
-            "├── execution.log",
-            "└── iteration_summary.md",
-            "```",
-        ])
+        lines.extend(
+            [
+                "│   └── reviews/",
+                "│       ├── requirements-round-1.md",
+                "│       └── design-round-1.md",
+                "├── requirements.md  (latest)",
+                "├── tech-design.md   (latest)",
+                "├── session.json",
+                "├── execution.log",
+                "└── iteration_summary.md",
+                "```",
+            ]
+        )
 
         return "\n".join(lines)

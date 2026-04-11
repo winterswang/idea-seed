@@ -1,6 +1,5 @@
 """Tests for session state."""
 
-
 from agent.state import (
     SessionState,
     save_state,

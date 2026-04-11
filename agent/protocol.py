@@ -29,9 +29,7 @@ def handle_shutdown_request(teammate: str) -> str:
     return f"Shutdown request {req_id} sent to '{teammate}' (status: pending)"
 
 
-def handle_shutdown_response(
-    req_id: str, approve: bool, reason: str = ""
-) -> str:
+def handle_shutdown_response(req_id: str, approve: bool, reason: str = "") -> str:
     """Handle shutdown response from teammate."""
     with _tracker_lock:
         if req_id in shutdown_requests:
@@ -63,9 +61,7 @@ def submit_plan(from_name: str, plan: str) -> str:
     return f"Plan submitted (request_id={req_id}). Waiting for lead approval."
 
 
-def approve_plan(
-    req_id: str, approve: bool, feedback: str = ""
-) -> str:
+def approve_plan(req_id: str, approve: bool, feedback: str = "") -> str:
     """Approve or reject a plan. Returns status."""
     with _tracker_lock:
         req = plan_requests.get(req_id)

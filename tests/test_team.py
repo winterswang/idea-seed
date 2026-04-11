@@ -1,6 +1,5 @@
 """Tests for team message bus."""
 
-
 from agent.team import MessageBus
 
 

@@ -69,15 +69,17 @@ def auto_compact(messages: list) -> list:
 
     response = client.messages.create(
         model=MODEL_ID,
-        messages=[{
-            "role": "user",
-            "content": (
-                "Summarize this conversation for continuity. Include: "
-                "1) What was accomplished, 2) Current state, "
-                "3) Key decisions made. Be concise but preserve critical details.\n\n"
-                + conversation_text
-            ),
-        }],
+        messages=[
+            {
+                "role": "user",
+                "content": (
+                    "Summarize this conversation for continuity. Include: "
+                    "1) What was accomplished, 2) Current state, "
+                    "3) Key decisions made. Be concise but preserve critical details.\n\n"
+                    + conversation_text
+                ),
+            }
+        ],
         max_tokens=2000,
     )
 

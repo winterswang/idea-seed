@@ -1,6 +1,7 @@
 """Main entry point for Idea Seed."""
 
 import argparse
+import os
 import sys
 
 from agent.orchestrator import Orchestrator
@@ -26,6 +27,18 @@ def main() -> None:
         action="store_true",
         help="Interactive mode",
     )
+    parser.add_argument(
+        "--provider",
+        choices=["minimax", "aliyun", "bytedance"],
+        default=None,
+        help="API provider to use (overrides .env setting)",
+    )
+    parser.add_argument(
+        "--max-rounds",
+        type=int,
+        default=None,
+        help="Maximum number of iteration rounds (default: 10)",
+    )
 
     args = parser.parse_args()
 
@@ -40,10 +53,20 @@ def main() -> None:
         parser.print_help()
         sys.exit(1)
 
-    print(f"\nStarting Idea Seed with seed: {seed}\n")
-    print("Press Ctrl+C to interrupt...\n")
+    # Override provider if specified
+    if args.provider:
+        os.environ["PROVIDER"] = args.provider
 
-    orchestrator = Orchestrator(seed=seed, resume=args.resume)
+    print(f"\nStarting Idea Seed with seed: {seed}\n")
+    if args.provider:
+        print(f"Using provider: {args.provider}")
+    if args.max_rounds:
+        print(f"Max rounds: {args.max_rounds}")
+    print("\nPress Ctrl+C to interrupt...\n")
+
+    orchestrator = Orchestrator(
+        seed=seed, resume=args.resume, max_rounds=args.max_rounds
+    )
     orchestrator.run()
 
 

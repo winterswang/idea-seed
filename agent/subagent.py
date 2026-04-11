@@ -78,20 +78,22 @@ def run_subagent(
                         else:
                             output = f"Unknown tool: {block.name}"
 
-                        results.append({
-                            "type": "tool_result",
-                            "tool_use_id": block.id,
-                            "content": str(output)[:50000],
-                        })
+                        results.append(
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": block.id,
+                                "content": str(output)[:50000],
+                            }
+                        )
 
                 sub_messages.append({"role": "user", "content": results})
 
-            except (Exception) as e:
+            except Exception as e:
                 _ = e  # Suppress lint warning - error is re-raised below
                 retry_count += 1
                 if retry_count < max_retries:
                     # Exponential backoff
-                    time.sleep(2 ** retry_count)
+                    time.sleep(2**retry_count)
                     continue
                 raise
 
@@ -121,8 +123,7 @@ def _extract_summary(content: Any) -> str:
 
 # Child agent tools - base tools only (no task to prevent recursion)
 CHILD_TOOLS = [
-    t for t in TOOL_SCHEMAS
-    if t["name"] not in ("task", "spawn", "shutdown_request")
+    t for t in TOOL_SCHEMAS if t["name"] not in ("task", "spawn", "shutdown_request")
 ]
 
 
@@ -135,7 +136,10 @@ PARENT_TOOLS = TOOL_SCHEMAS + [
             "type": "object",
             "properties": {
                 "prompt": {"type": "string"},
-                "description": {"type": "string", "description": "Short description of the task"},
+                "description": {
+                    "type": "string",
+                    "description": "Short description of the task",
+                },
             },
             "required": ["prompt"],
         },
