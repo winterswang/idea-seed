@@ -27,8 +27,6 @@ from agent.prompts import (
     REVIEWER_REQ_PROMPT,
     REVIEWER_DESIGN_SYSTEM,
     REVIEWER_DESIGN_PROMPT,
-    ALIGNER_SYSTEM,
-    ALIGNER_PROMPT,
 )
 
 
@@ -538,22 +536,6 @@ class Orchestrator:
             return False
         last_two = self.state.design_review_history[-2:]
         return all(r.get("approved", False) for r in last_two)
-
-    def _aligner_check(self) -> dict:
-        """Run Aligner to check if we're on track."""
-        progress = f"Phase: {self.state.phase}, "
-        if self.state.phase == PHASE_REQUIREMENTS:
-            progress += f"Requirements Round: {self.state.req_round}"
-        else:
-            progress += f"Design Round: {self.state.design_round}"
-
-        prompt = ALIGNER_PROMPT.format(
-            seed=self.state.seed,
-            progress_summary=progress,
-        )
-
-        result = run_subagent(prompt=prompt, system=ALIGNER_SYSTEM)
-        return {"result": result}
 
     def _builder_req_build(self, feedback: str | None, req_path: str) -> None:
         """Run requirements builder - writes directly to file."""

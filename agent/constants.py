@@ -58,5 +58,4 @@ ROLE_SYSTEM = {
     "builder_design": "You are a technical architect.",
     "reviewer_req": "You are a requirements review expert.",
     "reviewer_design": "You are a technical review expert.",
-    "aligner": "You are an aligner ensuring the process stays on track.",
 }

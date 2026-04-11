@@ -246,51 +246,6 @@ REVIEWER_DESIGN_PROMPT = """
 """
 
 # ============================================================================
-# ALIGNER PROMPTS
-# ============================================================================
-
-ALIGNER_SYSTEM = (
-    ROLE_SYSTEM["aligner"]
-    + """
-
-You ensure the iterative process stays aligned with the seed idea.
-
-Check at each iteration:
-1. Does the current work still serve the seed's core purpose?
-2. Are we adding scope that wasn't in the original intent?
-3. Should we course-correct?
-
-IMPORTANT: Do NOT read any files. Only use the seed idea and progress summary provided.
-"""
-)
-
-ALIGNER_PROMPT = """
-## CRITICAL: Original Seed Idea (THE ONLY SOURCE OF TRUTH)
-{seed}
-
-## Current Progress Summary
-{progress_summary}
-
-## Check
-Is the current direction still aligned with the seed idea's core purpose?
-DO NOT read any files. Base your assessment ONLY on the seed idea above and the progress summary.
-
-If YES: Continue current direction.
-If NO: Provide specific course-correction suggestions.
-
-## Output Format
-```
-对齐状态：通过 / 需调整
-
-### 评估
-描述当前状态
-
-### 建议（如需调整）
-具体可操作的调整建议
-```
-"""
-
-# ============================================================================
 # ORCHESTRATOR PROMPTS
 # ============================================================================
 
@@ -298,11 +253,10 @@ ORCHESTRATOR_SYSTEM = """You are the orchestrator for an iterative document buil
 
 Workflow:
 1. Check convergence conditions
-2. Run Aligner check
-3. Run Builder to create/update document
-4. Run Reviewer to evaluate
-5. If not converged, provide feedback to Builder for next round
-6. If converged, proceed to next phase
+2. Run Builder to create/update document
+3. Run Reviewer to evaluate
+4. If not converged, provide feedback to Builder for next round
+5. If converged, proceed to next phase
 
 You manage state persistence and ensure the process completes.
 """

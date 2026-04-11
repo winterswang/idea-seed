@@ -487,26 +487,21 @@ def run_requirements_phase(self):
         self.state.req_converged = True
         return
 
-    # 1. Aligner 检查
-    aligner_feedback = self.aligner_check()
-    if aligner_feedback:
-        self.inform_builder(aligner_feedback)
-
-    # 2. Builder 构建
+    # 1. Builder 构建
     requirements = self.builder_req.build(
         seed=self.state.seed,
         previous_feedback=self.state.req_review_history[-1].feedback if self.state.req_review_history else None
     )
     self.write_doc("requirements.md", requirements)
 
-    # 3. Reviewer 评审
+    # 2. Reviewer 评审
     review_result = self.reviewer_req.review(
         seed=self.state.seed,
         requirements=requirements
     )
     self.state.req_review_history.append(review_result)
 
-    # 4. 收敛判断
+    # 3. 收敛判断
     if self.check_req_convergence():
         self.state.req_converged = True
         self.state.phase = "tech_design"
@@ -535,26 +530,21 @@ def run_design_phase(self):
     # 1. 读取需求文档
     requirements = self.read_doc("requirements.md")
 
-    # 2. Aligner 检查
-    aligner_feedback = self.aligner_check()
-    if aligner_feedback:
-        self.inform_builder(aligner_feedback)
-
-    # 3. Builder 构建
+    # 2. Builder 构建
     tech_design = self.builder_design.build(
         requirements=requirements,
         previous_feedback=self.state.design_review_history[-1].feedback if self.state.design_review_history else None
     )
     self.write_doc("tech-design.md", tech_design)
 
-    # 4. Reviewer 评审
+    # 3. Reviewer 评审
     review_result = self.reviewer_design.review(
         requirements=requirements,
         tech_design=tech_design
     )
     self.state.design_review_history.append(review_result)
 
-    # 5. 收敛判断
+    # 4. 收敛判断
     if self.check_design_convergence():
         self.state.design_converged = True
         self.state.phase = "done"
@@ -695,11 +685,6 @@ REVIEWER_DESIGN_PROMPT = """
 1. {具体可操作的建议}
 2. ...
 """
-
-ALIGNER_SYSTEM = """你是 Aligner。
-确保迭代过程不偏离种子想法的核心目标。
-检查 Builder 的工作是否始终围绕种子想法展开。"""
-```
 
 ---
 
