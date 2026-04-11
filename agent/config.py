@@ -69,7 +69,7 @@ def get_model() -> str:
 
 # Backwards compatibility - MODEL_ID now points to active provider's model
 MODEL_ID = get_model()
-MAX_TOKENS = int(os.environ.get("MAX_TOKENS", "32000"))
+MAX_TOKENS = int(os.environ.get("MAX_TOKENS", "80000"))
 
 # Legacy names (kept for compatibility, but now delegated to active provider)
 MINIMAX_API_KEY = get_api_key()
