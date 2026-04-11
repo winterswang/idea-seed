@@ -276,21 +276,23 @@ class Orchestrator:
             last_review = self.state.req_review_history[-1]
             feedback = last_review.get("feedback")
 
-        # Run Builder
+        # File path for this round's requirements
+        round_req_path = self.req_rounds_dir / f"round-{self.state.req_round}.md"
+
+        # Run Builder - subagent writes directly to file
         self.logger.log("")
         self.logger.log("  [1/2] Running Requirements Builder...")
         start_time = time.time()
-        requirements = self._builder_req_build(feedback)
+        self._builder_req_build(feedback, str(round_req_path))
         build_time = time.time() - start_time
+
+        # Read back the file content that subagent wrote
+        requirements = self._read_doc(round_req_path)
         req_lines = requirements.count("\n")
         self.logger.log(f"      → Generated {req_lines} lines, {len(requirements)} chars in {build_time:.1f}s")
+        self.logger.log(f"      → Written to: rounds/requirements/round-{self.state.req_round}.md")
 
-        # Save round-specific requirements
-        round_req_path = self.req_rounds_dir / f"round-{self.state.req_round}.md"
-        self._write_doc(round_req_path, requirements)
-        self.logger.log(f"      → Saved to: rounds/requirements/round-{self.state.req_round}.md")
-
-        # Also update latest symlink/copy
+        # Also update latest copy
         self._write_doc(self.requirements_path, requirements)
         self.logger.log("      → Updated: requirements.md (latest)")
 
@@ -364,20 +366,22 @@ class Orchestrator:
         req_lines = requirements.count("\n")
         self.logger.log(f"      → Loaded {req_lines} lines from requirements.md")
 
-        # Run Builder
+        # File path for this round's design
+        round_design_path = self.design_rounds_dir / f"round-{self.state.design_round}.md"
+
+        # Run Builder - subagent writes directly to file
         self.logger.log("  [2/3] Running Design Builder...")
         start_time = time.time()
-        tech_design = self._builder_design_build(requirements, feedback)
+        self._builder_design_build(requirements, feedback, str(round_design_path))
         build_time = time.time() - start_time
+
+        # Read back the file content that subagent wrote
+        tech_design = self._read_doc(round_design_path)
         design_lines = tech_design.count("\n")
         self.logger.log(f"      → Generated {design_lines} lines, {len(tech_design)} chars in {build_time:.1f}s")
+        self.logger.log(f"      → Written to: rounds/designs/round-{self.state.design_round}.md")
 
-        # Save round-specific design
-        round_design_path = self.design_rounds_dir / f"round-{self.state.design_round}.md"
-        self._write_doc(round_design_path, tech_design)
-        self.logger.log(f"      → Saved to: rounds/designs/round-{self.state.design_round}.md")
-
-        # Also update latest symlink/copy
+        # Also update latest copy
         self._write_doc(self.tech_design_path, tech_design)
         self.logger.log("      → Updated: tech-design.md (latest)")
 
@@ -446,27 +450,31 @@ class Orchestrator:
         result = run_subagent(prompt=prompt, system=ALIGNER_SYSTEM)
         return {"result": result}
 
-    def _builder_req_build(self, feedback: str | None) -> str:
-        """Run requirements builder."""
+    def _builder_req_build(self, feedback: str | None, req_path: str) -> None:
+        """Run requirements builder - writes directly to file."""
         # Feedback is already just the previous round's feedback (not cumulative)
         # passed in from _run_requirements_phase
         prompt = BUILDER_REQ_PROMPT.format(
             seed=self.state.seed,
             previous_feedback=feedback or "None - first iteration",
+            req_path=req_path,
         )
 
-        return run_subagent(prompt=prompt, system=BUILDER_REQ_SYSTEM)
+        # Subagent writes directly to file, returns confirmation message
+        run_subagent(prompt=prompt, system=BUILDER_REQ_SYSTEM)
 
-    def _builder_design_build(self, requirements: str, feedback: str | None) -> str:
-        """Run technical design builder."""
+    def _builder_design_build(self, requirements: str, feedback: str | None, design_path: str) -> None:
+        """Run technical design builder - writes directly to file."""
         # Feedback is already just the previous round's feedback (not cumulative)
         # passed in from _run_design_phase
         prompt = BUILDER_DESIGN_PROMPT.format(
             requirements=requirements,
             previous_feedback=feedback or "None - first iteration",
+            design_path=design_path,
         )
 
-        return run_subagent(prompt=prompt, system=BUILDER_DESIGN_SYSTEM)
+        # Subagent writes directly to file, returns confirmation message
+        run_subagent(prompt=prompt, system=BUILDER_DESIGN_SYSTEM)
 
     def _reviewer_req_review(self, requirements: str) -> dict:
         """Run requirements reviewer."""

@@ -49,7 +49,10 @@ You are a requirements analyst. Generate the COMPLETE requirements.md content.
 {previous_feedback}
 
 ## Output
-Output the COMPLETE requirements.md content directly. Start with "# 需求文档：" followed by the ORIGINAL seed idea in a blockquote, then include every section in full detail.
+Write the COMPLETE requirements.md content to the file at this path:
+`{req_path}`
+
+Use the write_file tool to write the complete content directly. The file should start with "# 需求文档：" followed by the ORIGINAL seed idea in a blockquote, then include every section in full detail. Make sure the content is comprehensive (hundreds of lines).
 """
 
 BUILDER_DESIGN_SYSTEM = ROLE_SYSTEM["builder_design"] + """
@@ -91,7 +94,10 @@ You are a technical architect. Generate the COMPLETE tech-design.md content.
    - 开发任务 (development tasks)
 
 ## Output
-Output the COMPLETE tech-design.md content directly. Start with "# 技术方案：" and include every section in full detail.
+Write the COMPLETE tech-design.md content to the file at this path:
+`{design_path}`
+
+Use the write_file tool to write the complete content directly. Start with "# 技术方案：" and include every section in full detail. Make sure the content is comprehensive (hundreds of lines).
 """
 
 # ============================================================================

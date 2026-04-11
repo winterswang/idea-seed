@@ -5,15 +5,12 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv(override=True)
-
 
 # Project paths
 # Use __file__ to ensure WORKDIR is always the project root, regardless of cwd
 _WORKDIR = Path(__file__).parent.parent.resolve()
 
-# Load .env before accessing environment variables
-from dotenv import load_dotenv
+# Load .env from project directory before accessing environment variables
 load_dotenv(_WORKDIR / ".env", override=True)
 
 WORKDIR = _WORKDIR
