@@ -39,7 +39,11 @@ def agent_loop(
     """
     client = create_client()
     active_tools = tools if tools is not None else TOOL_SCHEMAS
-    tool_handlers = {t["name"]: TOOL_HANDLERS[t["name"]] for t in active_tools if t["name"] in TOOL_HANDLERS}
+    tool_handlers = {
+        t["name"]: TOOL_HANDLERS[t["name"]]
+        for t in active_tools
+        if t["name"] in TOOL_HANDLERS
+    }
 
     for _ in range(max_iterations):
         response = client.messages.create(
@@ -65,11 +69,13 @@ def agent_loop(
                 else:
                     output = f"Unknown tool: {block.name}"
 
-                results.append({
-                    "type": "tool_result",
-                    "tool_use_id": block.id,
-                    "content": str(output),
-                })
+                results.append(
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": block.id,
+                        "content": str(output),
+                    }
+                )
 
         messages.append({"role": "user", "content": results})
 
@@ -79,5 +85,9 @@ def agent_loop(
 def extract_text(content: object) -> str:
     """Extract text from response content."""
     if isinstance(content, list):
-        return "".join(b.text for b in content if hasattr(b, "text"))
+        return "".join(
+            b.text if hasattr(b, "text") else b.thinking
+            for b in content
+            if hasattr(b, "text") or hasattr(b, "thinking")
+        )
     return str(content)
