@@ -18,6 +18,9 @@ from agent.constants import (
     ITERATION_SUMMARY_FILE,
 )
 from agent.subagent import run_subagent
+from agent.review import ReviewAnalyzer
+from agent.token_tracker import TokenTracker
+from agent.state_manager import StateManager
 from agent.prompts import (
     BUILDER_REQ_SYSTEM,
     BUILDER_REQ_PROMPT,
@@ -225,6 +228,7 @@ class Orchestrator:
         seed: str,
         resume: bool = False,
         max_rounds: int | None = None,
+        enable_token_tracking: bool = True,
     ) -> None:
         """
         Initialize orchestrator.
@@ -233,6 +237,7 @@ class Orchestrator:
             seed: The original seed idea
             resume: Whether to resume from saved state
             max_rounds: Maximum rounds per phase (default: 10)
+            enable_token_tracking: Whether to enable token tracking
         """
         from agent.config import MAX_ROUNDS
 
@@ -249,6 +254,14 @@ class Orchestrator:
         # Initialize directories
         self.state_dir = self.project_dir / ".state"
         self.state_dir.mkdir(exist_ok=True)
+
+        # Initialize token tracker
+        self.token_tracker: TokenTracker | None = None
+        if enable_token_tracking:
+            self.token_tracker = TokenTracker(self.state_dir)
+
+        # Initialize state manager for enhanced persistence
+        self.state_manager = StateManager(self.state_dir)
 
         # Create rounds subdirectories for versioned artifacts
         self.rounds_dir = self.project_dir / "rounds"
@@ -282,7 +295,9 @@ class Orchestrator:
         self.logger.log(f"  📋 Session: {self.state.session_id}")
         self.logger.log(f"  📍 Phase: {self.state.phase.upper()}")
         self.logger.log(f"  🔄 Max Rounds: {self.max_rounds}")
-        self.logger.log("  🎯 Convergence: 2 consecutive approvals needed")
+        self.logger.log(
+            "  🎯 Convergence: 2 consecutive approvals or multi-dim scoring"
+        )
         self.logger.log(f"{'=' * 60}")
         self.logger.log("")
 
@@ -548,7 +563,13 @@ class Orchestrator:
         )
 
         # Subagent writes directly to file, returns confirmation message
-        run_subagent(prompt=prompt, system=BUILDER_REQ_SYSTEM)
+        run_subagent(
+            prompt=prompt,
+            system=BUILDER_REQ_SYSTEM,
+            token_tracker=self.token_tracker,
+            phase="requirements",
+            round_num=self.state.req_round,
+        )
 
     def _builder_design_build(
         self, requirements: str, feedback: str | None, design_path: str
@@ -563,44 +584,58 @@ class Orchestrator:
         )
 
         # Subagent writes directly to file, returns confirmation message
-        run_subagent(prompt=prompt, system=BUILDER_DESIGN_SYSTEM)
+        run_subagent(
+            prompt=prompt,
+            system=BUILDER_DESIGN_SYSTEM,
+            token_tracker=self.token_tracker,
+            phase="tech_design",
+            round_num=self.state.design_round,
+        )
 
     def _reviewer_req_review(self, requirements: str) -> dict:
-        """Run requirements reviewer."""
+        """Run requirements reviewer using ReviewAnalyzer for multi-dim scoring."""
         prompt = REVIEWER_REQ_PROMPT.format(
             seed=self.state.seed,
             requirements=requirements,
         )
 
-        result = run_subagent(prompt=prompt, system=REVIEWER_REQ_SYSTEM)
+        result_text, _ = run_subagent(prompt=prompt, system=REVIEWER_REQ_SYSTEM)
 
-        # Parse result to determine if approved
-        approved = check_approval(result)
-        feedback = result if not approved else None
+        # Use ReviewAnalyzer for structured analysis
+        analyzer = ReviewAnalyzer()
+        review_result = analyzer.analyze(result_text)
 
         return {
-            "approved": approved,
-            "feedback": feedback,
+            "approved": review_result.approved,
+            "feedback": review_result.raw_feedback
+            if not review_result.approved
+            else None,
+            "scores": review_result.scores,
+            "summary": review_result.summary,
             "round": self.state.req_round,
         }
 
     def _reviewer_design_review(self, requirements: str, tech_design: str) -> dict:
-        """Run technical design reviewer."""
+        """Run technical design reviewer using ReviewAnalyzer for multi-dim scoring."""
         prompt = REVIEWER_DESIGN_PROMPT.format(
             seed=self.state.seed,
             requirements=requirements,
             tech_design=tech_design,
         )
 
-        result = run_subagent(prompt=prompt, system=REVIEWER_DESIGN_SYSTEM)
+        result_text, _ = run_subagent(prompt=prompt, system=REVIEWER_DESIGN_SYSTEM)
 
-        # Parse result to determine if approved
-        approved = check_approval(result)
-        feedback = result if not approved else None
+        # Use ReviewAnalyzer for structured analysis
+        analyzer = ReviewAnalyzer()
+        review_result = analyzer.analyze(result_text)
 
         return {
-            "approved": approved,
-            "feedback": feedback,
+            "approved": review_result.approved,
+            "feedback": review_result.raw_feedback
+            if not review_result.approved
+            else None,
+            "scores": review_result.scores,
+            "summary": review_result.summary,
             "round": self.state.design_round,
         }
 
@@ -623,8 +658,12 @@ class Orchestrator:
         path.write_text(content)
 
     def _save_state(self) -> None:
-        """Save session state."""
-        save_state(self.state, self.state_dir / "session.json")
+        """Save session state using StateManager."""
+        try:
+            self.state_manager.save_state(self.state, self.state_dir / "session.json")
+        except Exception:
+            # Fallback to basic save_state
+            save_state(self.state, self.state_dir / "session.json")
 
     def _output_final_docs(self) -> None:
         """Output final documents summary."""

@@ -1,14 +1,18 @@
 """Subagent - spawn child agents with fresh context."""
 
 import time
-from typing import Any
+from typing import Any, Optional
 
 from agent.loop import create_client
-from agent.config import MODEL_ID, MAX_TOKENS
+from agent.config import MODEL_ID, MAX_TOKENS, TOKEN_THRESHOLD, KEEP_RECENT
+from agent.compact import micro_compact, compact_if_needed
 from tools.base import TOOL_HANDLERS, TOOL_SCHEMAS
 
 # Minimum content length to consider valid (avoids "(no summary)" cases)
 MIN_CONTENT_LENGTH = 500
+
+# Type alias for token tracker
+TokenTracker = "TokenTracker"  # Forward reference
 
 
 def run_subagent(
@@ -18,7 +22,11 @@ def run_subagent(
     max_tokens: int = MAX_TOKENS,
     max_iterations: int = 10,
     max_retries: int = 3,
-) -> str:
+    token_tracker: Optional[Any] = None,
+    phase: str = "",
+    round_num: int = 0,
+    compact_enabled: bool = True,
+) -> tuple[str, Optional[dict]]:
     """
     Run a subagent with fresh context.
 
@@ -32,9 +40,13 @@ def run_subagent(
         max_tokens: Max tokens for response
         max_iterations: Safety limit for tool calls
         max_retries: Max retries for API errors or short content
+        token_tracker: Optional TokenTracker instance for recording usage
+        phase: Current phase (requirements/tech_design)
+        round_num: Current round number
+        compact_enabled: Whether to enable context compression
 
     Returns:
-        Summary text from the subagent
+        Tuple of (summary text, usage info dict or None)
     """
     client = create_client()
     sub_messages = [{"role": "user", "content": prompt}]
@@ -46,6 +58,8 @@ def run_subagent(
         name = t["name"]
         if name != "task" and name in TOOL_HANDLERS:
             tool_handlers[name] = TOOL_HANDLERS[name]
+
+    usage_info: Optional[dict] = None
 
     for iteration in range(max_iterations):
         retry_count = 0
@@ -62,7 +76,26 @@ def run_subagent(
                 ) as stream:
                     response = stream.get_final_message()
 
+                # Extract usage info from response
+                if hasattr(response, "usage") and response.usage:
+                    usage_info = {
+                        "input_tokens": response.usage.input_tokens,
+                        "output_tokens": response.usage.output_tokens,
+                    }
+                    # Record usage if tracker is provided
+                    if token_tracker:
+                        token_tracker.record(
+                            model=MODEL_ID,
+                            usage=usage_info,
+                            phase=phase,
+                            round_num=round_num,
+                        )
+
                 sub_messages.append({"role": "assistant", "content": response.content})
+
+                # Layer 1: Micro compression after each response
+                if compact_enabled:
+                    sub_messages = micro_compact(sub_messages, keep_recent=KEEP_RECENT)
 
                 if response.stop_reason != "tool_use":
                     break
@@ -106,11 +139,16 @@ def run_subagent(
             sub_messages = [{"role": "user", "content": prompt + hint}]
             continue
 
-        # Return summary only - child context is discarded
-        return content
+        # Layer 2: Check if compression is needed before returning
+        if compact_enabled:
+            sub_messages = compact_if_needed(sub_messages, threshold=TOKEN_THRESHOLD)
+
+        # Return summary and usage info - child context is discarded
+        return content, usage_info
 
     # Final fallback - return whatever we got
-    return _extract_summary(response.content)
+    content = _extract_summary(response.content)
+    return content, usage_info
 
 
 def _extract_summary(content: Any) -> str:
