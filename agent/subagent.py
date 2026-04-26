@@ -1,5 +1,6 @@
 """Subagent - spawn child agents with fresh context."""
 
+import logging
 import time
 from typing import Any, Optional
 
@@ -60,6 +61,9 @@ def run_subagent(
             tool_handlers[name] = TOOL_HANDLERS[name]
 
     usage_info: Optional[dict] = None
+    response = None
+    last_error: Optional[Exception] = None
+    _logger = logging.getLogger("idea-seed")
 
     for iteration in range(max_iterations):
         retry_count = 0
@@ -122,13 +126,18 @@ def run_subagent(
                 sub_messages.append({"role": "user", "content": results})
 
             except Exception as e:
-                _ = e  # Suppress lint warning - error is re-raised below
+                last_error = e
+                _logger.warning(
+                    f"Subagent API error (attempt {retry_count + 1}/{max_retries}): {e}"
+                )
                 retry_count += 1
                 if retry_count < max_retries:
                     # Exponential backoff
                     time.sleep(2**retry_count)
                     continue
-                raise
+                raise RuntimeError(
+                    f"Subagent failed after {max_retries} retries"
+                ) from last_error
 
         # After getting response, check content length
         content = _extract_summary(response.content)
@@ -147,8 +156,10 @@ def run_subagent(
         return content, usage_info
 
     # Final fallback - return whatever we got
-    content = _extract_summary(response.content)
-    return content, usage_info
+    if response is not None:
+        content = _extract_summary(response.content)
+        return content, usage_info
+    return "(no response)", usage_info
 
 
 def _extract_summary(content: Any) -> str:

@@ -42,7 +42,7 @@ PROVIDERS = {
         "base_url": os.environ.get(
             "BYTEDANCE_BASE_URL", "https://ark.cn-beijing.volces.com/api/coding"
         ),
-        "model": os.environ.get("BYTEDANCE_MODEL", "kimi-k2.5"),
+        "model": os.environ.get("BYTEDANCE_MODEL", "glm-5.1"),
     },
 }
 

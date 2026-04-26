@@ -27,6 +27,8 @@ class SessionState:
     design_review_history: list = None
     req_converged: bool = False
     design_converged: bool = False
+    checksum: str = ""
+    version: int = 0
     created_at: str = ""
     updated_at: str = ""
 

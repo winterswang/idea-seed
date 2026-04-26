@@ -2,7 +2,6 @@
 
 import pytest
 from pathlib import Path
-import shutil
 
 from agent.state import SessionState
 from agent.state_manager import (
@@ -15,47 +14,38 @@ from agent.state_manager import (
 class TestStateManager:
     """Test StateManager class."""
 
-    def setup_method(self):
-        """Set up test fixtures."""
-        self.test_dir = Path("/tmp/test_state_manager")
-        if self.test_dir.exists():
-            shutil.rmtree(self.test_dir)
-        self.manager = StateManager(self.test_dir)
-
-    def teardown_method(self):
-        """Clean up test fixtures."""
-        if self.test_dir.exists():
-            shutil.rmtree(self.test_dir)
-
-    def test_save_and_load_state(self):
+    def test_save_and_load_state(self, tmp_path):
         """Test basic save and load."""
+        manager = StateManager(tmp_path)
         state = SessionState(
             session_id="test-123",
             seed="test seed",
             phase="requirements",
         )
 
-        saved_path = self.manager.save_state(state)
+        saved_path = manager.save_state(state)
         assert "session.v1.json" in saved_path
 
-        loaded = self.manager.load_state()
+        loaded = manager.load_state()
         assert loaded is not None
         assert loaded.session_id == "test-123"
         assert loaded.seed == "test seed"
         assert loaded.phase == "requirements"
 
-    def test_verify_integrity_valid(self):
+    def test_verify_integrity_valid(self, tmp_path):
         """Test integrity verification with valid data."""
+        manager = StateManager(tmp_path)
         state = SessionState(
             session_id="test-123",
             seed="test seed",
             phase="requirements",
         )
         data = state.to_dict()
-        assert self.manager.verify_integrity(data) is True
+        assert manager.verify_integrity(data) is True
 
-    def test_verify_integrity_missing_field(self):
+    def test_verify_integrity_missing_field(self, tmp_path):
         """Test integrity verification fails with missing fields."""
+        manager = StateManager(tmp_path)
         data = {
             "session_id": "test-123",
             # missing seed
@@ -63,27 +53,29 @@ class TestStateManager:
             "created_at": "2024-01-01",
             "updated_at": "2024-01-01",
         }
-        assert self.manager.verify_integrity(data) is False
+        assert manager.verify_integrity(data) is False
 
-    def test_file_lock(self):
+    def test_file_lock(self, tmp_path):
         """Test file lock acquisition and release."""
+        manager = StateManager(tmp_path)
         acquired = [False]
 
-        with self.manager.file_lock():
+        with manager.file_lock():
             acquired[0] = True
 
         # After exiting context, lock should be released
         assert acquired[0] is True
 
-    def test_file_lock_timeout(self):
+    def test_file_lock_timeout(self, tmp_path):
         """Test file lock timeout."""
-        # Acquire lock in another thread/process would block
-        # Here we just test the context manager works
-        with self.manager.file_lock():
+        manager = StateManager(tmp_path)
+        # Acquire lock
+        with manager.file_lock():
             pass  # Should complete without timeout
 
-    def test_backup_creation(self):
+    def test_backup_creation(self, tmp_path):
         """Test backup is created when saving existing state."""
+        manager = StateManager(tmp_path)
         state = SessionState(
             session_id="test-123",
             seed="test seed",
@@ -91,21 +83,22 @@ class TestStateManager:
         )
 
         # First save - creates version file
-        self.manager.save_state(state)
+        manager.save_state(state)
 
         # Create a symlink to simulate existing session.json
-        session_file = self.test_dir / "session.json"
+        session_file = tmp_path / "session.json"
         session_file.touch()
 
         # Modify and save again - should create backup
         state.seed = "modified seed"
-        self.manager.save_state(state)
+        manager.save_state(state)
 
-        backups = self.manager.list_backups()
+        backups = manager.list_backups()
         assert len(backups) >= 1
 
-    def test_versioning(self):
+    def test_versioning(self, tmp_path):
         """Test version numbering."""
+        manager = StateManager(tmp_path)
         state = SessionState(
             session_id="test-123",
             seed="test seed",
@@ -113,43 +106,46 @@ class TestStateManager:
         )
 
         # Save multiple versions
-        v1 = self.manager.save_state(state)
+        v1 = manager.save_state(state)
         state.seed = "v2"
-        v2 = self.manager.save_state(state)
+        v2 = manager.save_state(state)
         state.seed = "v3"
-        v3 = self.manager.save_state(state)
+        v3 = manager.save_state(state)
 
         assert "session.v1.json" in v1
         assert "session.v2.json" in v2
         assert "session.v3.json" in v3
 
-    def test_restore_backup(self):
+    def test_restore_backup(self, tmp_path):
         """Test restoring from backup."""
+        manager = StateManager(tmp_path)
         state = SessionState(
             session_id="test-123",
             seed="test seed",
             phase="requirements",
         )
 
-        self.manager.save_state(state)
+        manager.save_state(state)
 
         # Modify state
         state.seed = "modified"
-        self.manager.save_state(state)
+        manager.save_state(state)
 
         # Get first backup
-        backups = self.manager.list_backups()
+        backups = manager.list_backups()
         if backups:
-            success = self.manager.restore_backup(Path(backups[0]["path"]))
+            success = manager.restore_backup(Path(backups[0]["path"]))
             assert success is True
 
-    def test_load_nonexistent(self):
+    def test_load_nonexistent(self, tmp_path):
         """Test loading non-existent state."""
-        result = self.manager.load_state(Path("/nonexistent/path"))
+        manager = StateManager(tmp_path)
+        result = manager.load_state(Path("/nonexistent/path"))
         assert result is None
 
-    def test_checksum_computation(self):
+    def test_checksum_computation(self, tmp_path):
         """Test checksum is computed and used for verification."""
+        manager = StateManager(tmp_path)
         state = SessionState(
             session_id="test-123",
             seed="test seed",
@@ -160,25 +156,47 @@ class TestStateManager:
         assert not hasattr(state, "checksum") or not state.checksum
 
         # After save, checksum is set in the saved file
-        saved_path = self.manager.save_state(state)
+        saved_path = manager.save_state(state)
 
         # Verify the version file exists and contains expected data
         import json
+
         with open(saved_path) as f:
             data = json.load(f)
 
-        # SessionState.to_dict() doesn't include checksum field
-        # but StateManager adds it during save
+        # checksum and version are now properly persisted
         assert data["session_id"] == "test-123"
+        assert "checksum" in data
+        assert data["checksum"] != ""
+        assert "version" in data
+        assert data["version"] == 1
+
+    def test_save_state_no_side_effect(self, tmp_path):
+        """Test that save_state does not modify the original state object."""
+        manager = StateManager(tmp_path)
+        state = SessionState(
+            session_id="test-123",
+            seed="test seed",
+            phase="requirements",
+        )
+
+        original_checksum = state.checksum
+        original_version = state.version
+
+        manager.save_state(state)
+
+        # State object should not be modified by save_state
+        assert state.checksum == original_checksum
+        assert state.version == original_version
 
 
 class TestStateManagerLockTimeout:
     """Test StateManager lock timeout behavior."""
 
-    def test_lock_timeout_exception(self):
+    def test_lock_timeout_exception(self, tmp_path):
         """Test that LockTimeoutException is raised on timeout."""
         manager = StateManager(
-            Path("/tmp/test_lock_timeout"),
+            tmp_path / "lock_test",
             lock_timeout=0.1,  # Very short timeout
         )
 
@@ -193,9 +211,9 @@ class TestStateManagerLockTimeout:
 class TestStateCorruptedException:
     """Test StateCorruptedException."""
 
-    def test_exception_raised_on_invalid_state(self):
+    def test_exception_raised_on_invalid_state(self, tmp_path):
         """Test exception raised when saving invalid state."""
-        manager = StateManager(Path("/tmp/test_corrupted"))
+        manager = StateManager(tmp_path / "corrupted_test")
 
         # Create a state that will fail verification
         state = SessionState(

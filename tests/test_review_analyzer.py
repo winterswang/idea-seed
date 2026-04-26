@@ -1,6 +1,5 @@
 """Tests for ReviewAnalyzer."""
 
-
 from agent.review import ReviewAnalyzer, ReviewResult
 
 
@@ -50,8 +49,10 @@ class TestReviewAnalyzer:
     def test_check_approval_positive_patterns(self):
         """Test approval patterns result in acceptance."""
         assert self.analyzer.check_approval("评审结果：通过") is True
+        assert self.analyzer.check_approval("评审：通过") is True
         assert self.analyzer.check_approval("approved") is True
-        assert self.analyzer.check_approval("通过") is True
+        assert self.analyzer.check_approval("审核通过") is True
+        assert self.analyzer.check_approval("审查通过") is True
         assert self.analyzer.check_approval("pass") is True
         assert self.analyzer.check_approval("OK") is True
         assert self.analyzer.check_approval("✓") is True
@@ -66,6 +67,19 @@ class TestReviewAnalyzer:
         """Test default behavior is rejection."""
         assert self.analyzer.check_approval("random text") is False
         assert self.analyzer.check_approval("") is False
+
+    def test_check_approval_ok_word_boundary(self):
+        """Test 'ok' only matches as a whole word, not inside other words."""
+        assert self.analyzer.check_approval("looks good") is False
+        assert self.analyzer.check_approval("book") is False
+        assert self.analyzer.check_approval("token") is False
+        assert self.analyzer.check_approval("ok") is True
+        assert self.analyzer.check_approval("OK") is True
+
+    def test_check_approval_conditional_approval(self):
+        """Test conditional approval (修改后通过) is rejected."""
+        assert self.analyzer.check_approval("修改后通过") is False
+        assert self.analyzer.check_approval("需修改后通过") is False
 
     def test_generate_summary_with_issues(self):
         """Test summary generation with issues."""

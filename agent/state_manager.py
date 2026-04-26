@@ -127,12 +127,15 @@ class StateManager:
             if path is None:
                 path = self.state_dir / "session.json"
 
+            # Build data dict without modifying the state object
+            data = state.to_dict()
+
             # Verify state integrity
-            if not self.verify_integrity(state.to_dict()):
+            if not self.verify_integrity(data):
                 raise StateCorruptedException("State verification failed")
 
-            # Compute checksum
-            state.checksum = self._compute_checksum(state.to_dict())
+            # Compute checksum and set on the data dict (not on state)
+            data["checksum"] = self._compute_checksum(data)
 
             # Create backup if main file exists
             if path.exists():
@@ -140,11 +143,11 @@ class StateManager:
 
             # Get next version number
             version = self._get_next_version()
-            state.version = version
+            data["version"] = version
 
             # Save to versioned file
             version_file = self.version_dir / f"session.v{version}.json"
-            self._atomic_write(state.to_dict(), version_file)
+            self._atomic_write(data, version_file)
 
             # Update symlink
             if path.is_symlink() or path.exists():
@@ -240,6 +243,8 @@ class StateManager:
             return False
         if not isinstance(data.get("req_review_history", []), list):
             return False
+        if not isinstance(data.get("version", 0), int):
+            return False
 
         return True
 
@@ -291,6 +296,21 @@ class StateManager:
 
     def _compute_checksum(self, data: dict) -> str:
         """Compute MD5 checksum for state data."""
+        # Include core state + convergence flags + review history summary
+        review_count = len(data.get("req_review_history", []))
+        design_count = len(data.get("design_review_history", []))
+        # Last review approved status if exists
+        last_req_approved = (
+            data["req_review_history"][-1].get("approved")
+            if data.get("req_review_history")
+            else None
+        )
+        last_design_approved = (
+            data["design_review_history"][-1].get("approved")
+            if data.get("design_review_history")
+            else None
+        )
+
         content = json.dumps(
             {
                 "session_id": data["session_id"],
@@ -298,6 +318,12 @@ class StateManager:
                 "phase": data["phase"],
                 "req_round": data.get("req_round", 0),
                 "design_round": data.get("design_round", 0),
+                "req_converged": data.get("req_converged", False),
+                "design_converged": data.get("design_converged", False),
+                "review_count": review_count,
+                "design_count": design_count,
+                "last_req_approved": last_req_approved,
+                "last_design_approved": last_design_approved,
             },
             sort_keys=True,
         )
@@ -364,6 +390,9 @@ class StateManager:
     def _atomic_write(self, data: dict, path: Path) -> None:
         """Atomically write data to file."""
         path_tmp = path.with_suffix(".tmp")
+        # Clean up any residual .tmp file from a previous crash
+        if path_tmp.exists():
+            path_tmp.unlink()
         with open(path_tmp, "w") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
             f.flush()

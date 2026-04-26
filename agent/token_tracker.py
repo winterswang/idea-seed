@@ -1,17 +1,21 @@
 """Token usage tracking and reporting."""
 
+import fcntl
 import json
 import logging
+import time
+from contextlib import contextmanager
 from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Optional
 
 
 # Token pricing per 1M tokens (input, output)
 TOKEN_PRICING = {
     "minimax2.7": (0.10, 0.30),
     "qwen3.6-plus": (0.08, 0.24),
-    "kimi-k2.5": (0.12, 0.36),
+    "glm-5.1": (0.12, 0.36),
 }
 
 # Single call anomaly threshold
@@ -63,8 +67,32 @@ class TokenTracker:
 
         self.records_file = self.state_dir / "token_records.json"
         self.stats_file = self.state_dir / "token_stats.json"
+        self._lock_file = self.state_dir / "token_records.lock"
 
         self._logger = logging.getLogger("idea-seed")
+
+    @contextmanager
+    def _file_lock(self, timeout: float = 10.0):
+        """File lock context manager for thread-safe record access."""
+        lock_fd = None
+        try:
+            lock_fd = open(self._lock_file, "w")
+            start_time = time.time()
+            while True:
+                try:
+                    fcntl.flock(lock_fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    if time.time() - start_time >= timeout:
+                        raise TimeoutError(
+                            f"Failed to acquire token tracker lock after {timeout}s"
+                        )
+                    time.sleep(0.1)
+            yield
+        finally:
+            if lock_fd:
+                fcntl.flock(lock_fd.fileno(), fcntl.LOCK_UN)
+                lock_fd.close()
 
     def record(
         self,
@@ -105,10 +133,11 @@ class TokenTracker:
             round=round_num,
         )
 
-        # Save record
-        records = self._load_records()
-        records.append(record.to_dict())
-        self._save_records(records)
+        # Save record with lock
+        with self._file_lock():
+            records = self._load_records_unsafe()
+            records.append(record.to_dict())
+            self._save_records_unsafe(records)
 
         # Check for anomaly
         self._check_anomaly(record)
@@ -136,14 +165,21 @@ class TokenTracker:
 
         return self._compute_stats(records)
 
-    def detect_anomalies(self) -> list[TokenRecord]:
+    def detect_anomalies(
+        self, records: Optional[list[dict]] = None
+    ) -> list[TokenRecord]:
         """
         Detect anomalous token usage records.
+
+        Args:
+            records: Optional pre-loaded records (avoids re-reading file)
 
         Returns:
             List of records exceeding SINGLE_CALL_THRESHOLD
         """
-        records = self._load_records()
+        if records is None:
+            records = self._load_records()
+
         anomalies: list[TokenRecord] = []
 
         for r in records:
@@ -189,14 +225,19 @@ class TokenTracker:
     # === Private methods ===
 
     def _load_records(self) -> list[dict]:
-        """Load records from file."""
+        """Load records from file (with lock)."""
+        with self._file_lock():
+            return self._load_records_unsafe()
+
+    def _load_records_unsafe(self) -> list[dict]:
+        """Load records from file (without lock)."""
         if self.records_file.exists():
             with open(self.records_file) as f:
                 return json.load(f)
         return []
 
-    def _save_records(self, records: list[dict]) -> None:
-        """Save records to file."""
+    def _save_records_unsafe(self, records: list[dict]) -> None:
+        """Save records to file (without lock - caller must hold lock)."""
         with open(self.records_file, "w") as f:
             json.dump(records, f, indent=2, ensure_ascii=False)
 
@@ -265,5 +306,5 @@ class TokenTracker:
             call_count=call_count,
             avg_tokens_per_call=total_tokens / call_count if call_count > 0 else 0,
             max_tokens_single_call=max(r["total_tokens"] for r in records),
-            anomaly_count=len(self.detect_anomalies()),
+            anomaly_count=len(self.detect_anomalies(records)),
         )

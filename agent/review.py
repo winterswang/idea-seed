@@ -55,6 +55,8 @@ class ReviewAnalyzer:
         r"not\s+approved",  # not approved directly
         r"需修改",
         r"需要修改",
+        r"修改后通过",
+        r"需修改后通过",
         r"不通过",
         r"rejected",
         r"驳回",
@@ -65,13 +67,12 @@ class ReviewAnalyzer:
 
     # 通过模式
     APPROVED_PATTERNS = [
-        r"评审结果[：:]\s*通过",
+        r"评审(结果)?[：:]\s*通过",
         r"approved",
-        r"通过",
-        r"pass",
         r"审核通过",
         r"审查通过",
-        r"ok",
+        r"pass",
+        r"\bok\b",
         r"✓",
     ]
 
@@ -244,7 +245,7 @@ class ReviewAnalyzer:
     def _normalize_dimension(self, name: str) -> Optional[str]:
         """将维度名称标准化"""
         for standard, aliases in self.DIMENSION_MAPPING.items():
-            if name in aliases or name == standard:
+            if name in aliases:
                 return standard
         return None
 
@@ -252,15 +253,15 @@ class ReviewAnalyzer:
         """提取已有的摘要内容"""
         # 常见的摘要标记
         patterns = [
-            r"摘要[：:]\s*(.{0,500})",
-            r"总结[：:]\s*(.{0,500})",
-            r"概述[：:]\s*(.{0,500})",
-            r"评审摘要[：:]\s*(.{0,500})",
-            r"主要反馈[：:]\s*(.{0,500})",
+            r"摘要[：:]\s*([^\n]{0,500})",
+            r"总结[：:]\s*([^\n]{0,500})",
+            r"概述[：:]\s*([^\n]{0,500})",
+            r"评审摘要[：:]\s*([^\n]{0,500})",
+            r"主要反馈[：:]\s*([^\n]{0,500})",
         ]
 
         for pattern in patterns:
-            match = re.search(pattern, output, re.DOTALL)
+            match = re.search(pattern, output)
             if match:
                 return match.group(1).strip()
 

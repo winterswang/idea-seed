@@ -70,7 +70,7 @@ MINIMAX_MODEL=minimax2.7
 
 # 或使用字节跳动
 # BYTEDANCE_API_KEY=your-api-key
-# BYTEDANCE_MODEL=kimi-k2.5
+# BYTEDANCE_MODEL=glm-5.1
 ```
 
 ### 3. 运行
@@ -124,13 +124,24 @@ projects/
     ├── requirements.md        # 需求文档（最新版本）
     ├── tech-design.md         # 技术方案（最新版本）
     ├── execution.log          # 执行日志
+    ├── .state/                # 状态持久化目录
+    │   ├── session.json       # 当前状态（symlink）
+    │   ├── versions/          # 版本历史
+    │   │   ├── session.v1.json
+    │   │   └── session.v2.json
+    │   ├── backups/           # 自动备份
+    │   ├── token_records.json # Token 用量记录
+    │   └── token_stats.json   # Token 统计缓存
     └── rounds/                # 每轮迭代的版本记录
         ├── requirements/
         │   ├── round-1.md
         │   └── round-2.md
+        ├── designs/
+        │   ├── round-1.md
+        │   └── round-2.md
         └── reviews/
             ├── requirements-round-1.md
-            └── requirements-round-2.md
+            └── design-round-1.md
 ```
 
 ### 需求文档 (requirements.md)
@@ -160,7 +171,7 @@ projects/
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| `MAX_TOKENS` | 32000 | 单次生成最大 token 数 |
+| `MAX_TOKENS` | 80000 | 单次生成最大 token 数 |
 | `MAX_ROUNDS` | 10 | 每阶段最大迭代轮数 |
 | `TOKEN_THRESHOLD` | 150000 | 上下文压缩阈值 |
 | `KEEP_RECENT` | 3 | 压缩时保留的最近消息数 |
@@ -188,7 +199,39 @@ Builder subagent 通过 `write_file` 工具直接写入完整内容到文件，�
 支持切换不同的 AI 服务商：
 - **MiniMax** - 默认
 - **阿里云**（qwen3.6-plus）
-- **字节跳动**（kimi-k2.5）
+- **字节跳动**（glm-5.1）
+
+### 多维度评审 (ReviewAnalyzer)
+
+Reviewer 的输出通过 `ReviewAnalyzer` 进行四维度结构化分析：
+
+| 维度 | 说明 |
+|------|------|
+| 意图对齐 | 文档是否与种子想法一致 |
+| 完整性 | 内容覆盖是否全面 |
+| 可执行性 | 是否可直接用于开发 |
+| 格式合规 | 文档结构是否规范 |
+
+评审判断优先级：否定模式（需修改/不通过）> 通过模式（通过/approved）> 默认拒绝。
+
+### 状态管理 (StateManager)
+
+增强的状态持久化机制：
+- **版本控制**：每次保存生成版本文件 (`session.v1.json`, `session.v2.json`, ...)
+- **自动备份**：保存前自动备份旧状态
+- **完整性校验**：MD5 checksum 验证状态未被篡改
+- **文件锁**：`fcntl.flock` 保证并发安全
+- **自动恢复**：校验失败时自动从备份/版本中恢复
+- **原子写入**：先写临时文件再 rename，避免写入中断导致数据损坏
+
+### Token 用量追踪 (TokenTracker)
+
+自动记录和统计 API 调用消耗：
+- 每次调用记录 input/output tokens
+- 按模型定价计算费用估算
+- 异常检测（单次调用超过 50000 tokens）
+- 支持 daily/weekly/monthly/all 统计周期
+- 生成 Markdown 格式的消耗报告
 
 ---
 
@@ -202,7 +245,10 @@ idea-seed/
 │   ├── loop.py             # Agent Loop 核心
 │   ├── orchestrator.py      # 业务编排器
 │   ├── prompts.py           # Prompt 模板
-│   ├── state.py             # 状态持久化
+│   ├── state.py             # 会话状态定义
+│   ├── state_manager.py     # 增强状态管理（版本/备份/校验/锁）
+│   ├── review.py            # 多维度评审分析器
+│   ├── token_tracker.py     # Token 用量追踪与报告
 │   ├── subagent.py          # 子智能体运行器
 │   ├── main.py              # CLI 入口
 │   ├── compact.py           # 上下文压缩

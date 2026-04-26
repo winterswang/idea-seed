@@ -149,54 +149,6 @@ def slugify(text: str) -> str:
     return "-".join(keywords) + "-" + hash_suffix
 
 
-def check_approval(review_result: str) -> bool:
-    """
-    Check if a review result indicates approval.
-
-    Uses a priority-based approach:
-    1. Negation patterns (not ... approved) are checked first
-    2. Rejection indicators (需修改, rejected, etc.) are checked next
-    3. Approval indicators are checked last
-
-    Args:
-        review_result: The text output from the reviewer
-
-    Returns:
-        True if approved, False otherwise
-    """
-    result_lower = review_result.lower()
-
-    # Priority 1: Check for negation patterns that override approval
-    # These always result in rejection
-    negation_patterns = [
-        "not ",  # English negation prefix (not approved, not fully approved, etc.)
-        "需修改",  # Chinese: needs modification
-        "rejected",  # English: rejected
-    ]
-    for pattern in negation_patterns:
-        if pattern.lower() in result_lower:
-            # Special case: "not" needs to be followed by "approved"
-            if pattern == "not ":
-                if "approved" in result_lower:
-                    return False  # "not ... approved" is rejection
-                # "not" without "approved" - ignore, might be "not needed" etc.
-                continue
-            return False
-
-    # Priority 2: Check for approval indicators
-    approval_patterns = [
-        "评审结果",  # Has explicit verdict line
-        "approved",  # English approval (not negated)
-        "通过",  # Chinese approval (anywhere)
-    ]
-    for pattern in approval_patterns:
-        if pattern.lower() in result_lower:
-            return True
-
-    # Default: not approved
-    return False
-
-
 class Logger:
     """Simple file logger for tracking execution."""
 
@@ -263,6 +215,9 @@ class Orchestrator:
         # Initialize state manager for enhanced persistence
         self.state_manager = StateManager(self.state_dir)
 
+        # Initialize review analyzer (singleton)
+        self.review_analyzer = ReviewAnalyzer()
+
         # Create rounds subdirectories for versioned artifacts
         self.rounds_dir = self.project_dir / "rounds"
         self.req_rounds_dir = self.rounds_dir / "requirements"
@@ -275,8 +230,19 @@ class Orchestrator:
         # Resume or create new
         state_file = self.state_dir / "session.json"
         if resume and state_file.exists():
-            self.state = load_state(state_file)
-            self.logger.log(f"Resumed session: {self.state.session_id}")
+            loaded = self.state_manager.load_state(state_file)
+            if loaded is not None:
+                self.state = loaded
+                self.logger.log(
+                    f"Resumed session: {self.state.session_id} (integrity verified)"
+                )
+            else:
+                # StateManager couldn't recover; fallback to basic load
+                self.state = load_state(state_file)
+                self.logger.log(
+                    f"Resumed session (basic load): {self.state.session_id}",
+                    "WARN",
+                )
         else:
             self.state = SessionState(
                 session_id=str(uuid.uuid4()),
@@ -344,9 +310,9 @@ class Orchestrator:
         # Calculate progress toward convergence
         review_count = len(self.state.req_review_history)
         recent_approved = (
-            sum(1 for r in self.state.req_review_history[-2:])
-            if review_count >= 1
-            else 0
+            sum(1 for r in self.state.req_review_history[-2:] if r.get("approved"))
+            if review_count >= 2
+            else sum(1 for r in self.state.req_review_history if r.get("approved"))
         )
         progress = f"[Round {self.state.req_round}/{self.max_rounds}] [Recent approvals: {recent_approved}/2]"
 
@@ -441,9 +407,9 @@ class Orchestrator:
         # Calculate progress toward convergence
         review_count = len(self.state.design_review_history)
         recent_approved = (
-            sum(1 for r in self.state.design_review_history[-2:])
-            if review_count >= 1
-            else 0
+            sum(1 for r in self.state.design_review_history[-2:] if r.get("approved"))
+            if review_count >= 2
+            else sum(1 for r in self.state.design_review_history if r.get("approved"))
         )
         progress = f"[Round {self.state.design_round}/{self.max_rounds}] [Recent approvals: {recent_approved}/2]"
 
@@ -602,8 +568,7 @@ class Orchestrator:
         result_text, _ = run_subagent(prompt=prompt, system=REVIEWER_REQ_SYSTEM)
 
         # Use ReviewAnalyzer for structured analysis
-        analyzer = ReviewAnalyzer()
-        review_result = analyzer.analyze(result_text)
+        review_result = self.review_analyzer.analyze(result_text)
 
         return {
             "approved": review_result.approved,
@@ -626,8 +591,7 @@ class Orchestrator:
         result_text, _ = run_subagent(prompt=prompt, system=REVIEWER_DESIGN_SYSTEM)
 
         # Use ReviewAnalyzer for structured analysis
-        analyzer = ReviewAnalyzer()
-        review_result = analyzer.analyze(result_text)
+        review_result = self.review_analyzer.analyze(result_text)
 
         return {
             "approved": review_result.approved,
