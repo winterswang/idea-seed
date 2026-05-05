@@ -109,6 +109,41 @@ PYTHONPATH=$(pwd) python -m agent.main --resume "你的种子想法"
 | `--interactive` | 交互模式，提示输入种子 |
 | `--provider` | 指定 AI 服务商（minimax/aliyun/bytedance） |
 | `--max-rounds` | 最大迭代轮数（默认 10） |
+| `--mode` | 执行模式：`legacy`（默认）或 `plan` |
+
+---
+
+## 执行模式
+
+Idea Seed V2 支持两种执行模式：
+
+| 模式 | 流程 | 说明 |
+|------|------|------|
+| `legacy` | Requirements → Tech Design → Done | 传统技术方案模式 |
+| `plan` | Requirements → Execution Plan → Done | V2 执行计划模式 |
+
+### Legacy 模式（默认）
+
+生成技术方案文档（tech-design.md），描述系统架构和技术选型。
+
+### Plan 模式（V2）
+
+生成执行计划文档（execution-plan.md），包含：
+- **Phase（阶段）**：逻辑任务分组
+- **Task（任务）**：可执行的最小单元，带验证配置
+- **Checkpoint（检查点）**：验证任务完成情况
+
+```bash
+# 使用 Plan 模式
+python -m agent.main "种子想法" --mode plan
+```
+
+### Plan 模式特性
+
+- 每个任务有明确的验证方式（command、file、coverage、manual）
+- 支持阶段性 Checkpoint 验证
+- 支持增量更新（需求变更时局部更新计划）
+- 支持一致性检查（依赖循环、孤立任务检测）
 
 ---
 

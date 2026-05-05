@@ -39,6 +39,12 @@ def main() -> None:
         default=None,
         help="Maximum number of iteration rounds (default: 10)",
     )
+    parser.add_argument(
+        "--mode",
+        choices=["legacy", "plan"],
+        default="legacy",
+        help="Execution mode: 'legacy' for requirements→tech_design→done, 'plan' for requirements→execution_plan→done (default: legacy)",
+    )
 
     args = parser.parse_args()
 
@@ -62,10 +68,14 @@ def main() -> None:
         print(f"Using provider: {args.provider}")
     if args.max_rounds:
         print(f"Max rounds: {args.max_rounds}")
+    print(f"Mode: {args.mode}")
     print("\nPress Ctrl+C to interrupt...\n")
 
     orchestrator = Orchestrator(
-        seed=seed, resume=args.resume, max_rounds=args.max_rounds
+        seed=seed,
+        resume=args.resume,
+        max_rounds=args.max_rounds,
+        mode=args.mode,
     )
     orchestrator.run()
 

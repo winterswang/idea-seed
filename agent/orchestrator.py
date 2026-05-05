@@ -12,8 +12,12 @@ from agent.state import SessionState, save_state, load_state
 from agent.constants import (
     PHASE_REQUIREMENTS,
     PHASE_TECH_DESIGN,
+    PHASE_EXECUTION_PLAN,
     PHASE_DONE,
+    MODE_LEGACY,
+    MODE_PLAN,
     REQUIREMENTS_FILE,
+    EXECUTION_PLAN_FILE,
     TECH_DESIGN_FILE,
     ITERATION_SUMMARY_FILE,
 )
@@ -181,6 +185,7 @@ class Orchestrator:
         resume: bool = False,
         max_rounds: int | None = None,
         enable_token_tracking: bool = True,
+        mode: str = MODE_LEGACY,
     ) -> None:
         """
         Initialize orchestrator.
@@ -190,9 +195,11 @@ class Orchestrator:
             resume: Whether to resume from saved state
             max_rounds: Maximum rounds per phase (default: 10)
             enable_token_tracking: Whether to enable token tracking
+            mode: Execution mode - "legacy" (requirements→tech_design→done) or "plan" (requirements→execution_plan→done)
         """
         from agent.config import MAX_ROUNDS
 
+        self.mode = mode
         self.max_rounds = max_rounds if max_rounds is not None else MAX_ROUNDS
         # Create project directory based on seed
         self.project_slug = slugify(seed)
@@ -248,6 +255,7 @@ class Orchestrator:
                 session_id=str(uuid.uuid4()),
                 seed=seed,
                 phase=PHASE_REQUIREMENTS,
+                mode=self.mode,
             )
             save_state(self.state, state_file)
             self.logger.log(f"Started new session: {self.state.session_id}")
@@ -261,15 +269,24 @@ class Orchestrator:
         self.logger.log(f"  📋 Session: {self.state.session_id}")
         self.logger.log(f"  📍 Phase: {self.state.phase.upper()}")
         self.logger.log(f"  🔄 Max Rounds: {self.max_rounds}")
+        self.logger.log(f"  🎯 Mode: {self.mode.upper()}")
         self.logger.log(
             "  🎯 Convergence: 2 consecutive approvals or multi-dim scoring"
         )
         self.logger.log(f"{'=' * 60}")
         self.logger.log("")
 
+        # Set mode in state if resuming
+        if resume:
+            self.state.mode = self.mode
+
     @property
     def requirements_path(self) -> Path:
         return self.project_dir / REQUIREMENTS_FILE
+
+    @property
+    def execution_plan_path(self) -> Path:
+        return self.project_dir / EXECUTION_PLAN_FILE
 
     @property
     def tech_design_path(self) -> Path:
@@ -288,7 +305,12 @@ class Orchestrator:
                 if self.state.phase == PHASE_REQUIREMENTS:
                     self._run_requirements_phase()
                 elif self.state.phase == PHASE_TECH_DESIGN:
-                    self._run_design_phase()
+                    if self.mode == MODE_PLAN:
+                        self._run_execution_plan_phase()
+                    else:
+                        self._run_design_phase()
+                elif self.state.phase == PHASE_EXECUTION_PLAN:
+                    self._run_execution_plan_phase()
                 elif self.state.phase == PHASE_DONE:
                     self._output_final_docs()
                     break
@@ -518,6 +540,169 @@ class Orchestrator:
         last_two = self.state.design_review_history[-2:]
         return all(r.get("approved", False) for r in last_two)
 
+    def _check_execution_plan_convergence(self) -> bool:
+        """Check if execution plan phase has converged."""
+        if len(self.state.execution_plan_review_history) < 2:
+            return False
+        last_two = self.state.execution_plan_review_history[-2:]
+        return all(r.get("approved", False) for r in last_two)
+
+    def _run_execution_plan_phase(self) -> None:
+        """Run one round of execution plan building (V2 mode)."""
+        self.state.execution_plan_round += 1
+
+        # Calculate progress toward convergence
+        review_count = len(self.state.execution_plan_review_history)
+        recent_approved = (
+            sum(
+                1
+                for r in self.state.execution_plan_review_history[-2:]
+                if r.get("approved")
+            )
+            if review_count >= 2
+            else sum(
+                1 for r in self.state.execution_plan_review_history if r.get("approved")
+            )
+        )
+        progress = f"[Round {self.state.execution_plan_round}/{self.max_rounds}] [Recent approvals: {recent_approved}/2]"
+
+        self.logger.log("")
+        self.logger.log(f"{'=' * 60}")
+        self.logger.log(
+            f"  EXECUTION PLAN PHASE - Round {self.state.execution_plan_round}"
+        )
+        self.logger.log(f"  Progress: {progress}")
+        self.logger.log(f"{'=' * 60}")
+        self.logger.log("")
+
+        # Import execution plan modules
+        from agent.execution_plan.generator import ExecutionPlanGenerator
+        from agent.execution_plan.prompts import (
+            REVIEWER_EXECUTION_PLAN_SYSTEM,
+            REVIEWER_EXECUTION_PLAN_PROMPT,
+        )
+
+        # Run Execution Plan Builder
+        self.logger.log("  [1/2] Running Execution Plan Builder...")
+
+        # Get requirements content
+        requirements = self._read_doc(self.requirements_path)
+
+        # Determine output path
+        execution_plan_path = self.project_dir / "execution-plan.md"
+
+        # Get previous feedback if any
+        previous_feedback = None
+        if self.state.execution_plan_review_history:
+            last_review = self.state.execution_plan_review_history[-1]
+            if last_review.get("feedback"):
+                previous_feedback = last_review["feedback"]
+
+        # Generate execution plan
+        generator = ExecutionPlanGenerator(self)
+        execution_plan, plan_md = generator.generate(
+            requirements=requirements,
+            output_path=execution_plan_path,
+            previous_feedback=previous_feedback,
+        )
+
+        # Write plan to file
+        self._write_doc(execution_plan_path, plan_md)
+
+        self.logger.log(
+            f"      → Generated plan with {len(execution_plan.tasks)} tasks, {len(execution_plan.phases)} phases"
+        )
+        self.logger.log("      → Written to: execution-plan.md")
+        self.logger.log(
+            f"      → Executability score: {execution_plan.executability_score:.1%}"
+        )
+        self.logger.log(
+            f"      → Verification coverage: {execution_plan.verification_coverage:.1%}"
+        )
+
+        # Run Reviewer
+        self.logger.log("  [2/2] Running Execution Plan Reviewer...")
+
+        # Prepare review prompt
+        review_prompt = REVIEWER_EXECUTION_PLAN_PROMPT.format(
+            requirements_summary=requirements[:1000],
+            execution_plan_content=plan_md,
+        )
+
+        # Run subagent for review
+        run_subagent(
+            prompt=review_prompt,
+            system=REVIEWER_EXECUTION_PLAN_SYSTEM,
+            token_tracker=self.token_tracker,
+            phase="execution_plan",
+            round_num=self.state.execution_plan_round,
+        )
+
+        # Analyze review output using ReviewAnalyzer
+        # Note: In a full implementation, the review output would be captured and analyzed
+        # For now, we'll do a simple check
+        review_result = {
+            "approved": False,  # Default to not approved until we have proper analysis
+            "feedback": "Review analysis pending",
+        }
+
+        self.state.execution_plan_review_history.append(review_result)
+
+        approved = "✅ APPROVED" if review_result["approved"] else "❌ NEEDS WORK"
+        self.logger.log(f"      → Review: {approved}")
+
+        # Save round-specific review report
+        round_review_path = (
+            self.review_rounds_dir
+            / f"execution-plan-round-{self.state.execution_plan_round}.md"
+        )
+        review_content = self._format_review_report(
+            phase="Execution Plan",
+            round_num=self.state.execution_plan_round,
+            seed=self.state.seed,
+            approved=review_result["approved"],
+            feedback=review_result["feedback"],
+            document=plan_md,
+        )
+        self._write_doc(round_review_path, review_content)
+        self.logger.log(
+            f"      → Review saved to: rounds/reviews/execution-plan-round-{self.state.execution_plan_round}.md"
+        )
+
+        # Store execution plan in state
+        self.state.tasks = [
+            t.to_dict() if hasattr(t, "to_dict") else t for t in execution_plan.tasks
+        ]
+        self.state.checkpoints = [
+            c.to_dict() if hasattr(c, "to_dict") else c
+            for c in execution_plan.checkpoints
+        ]
+        self.state.execution_plan_md5 = self._calculate_md5(plan_md)
+
+        # Check convergence
+        if self._check_execution_plan_convergence():
+            self.logger.log("")
+            self.logger.log("  🎉 CONVERGENCE REACHED! Execution plan is stable.")
+            self.state.execution_plan_converged = True
+            self.state.phase = PHASE_DONE
+        else:
+            self.logger.log("")
+            recent = (
+                sum(
+                    1
+                    for r in self.state.execution_plan_review_history[-2:]
+                    if r.get("approved")
+                )
+                if len(self.state.execution_plan_review_history) >= 2
+                else 0
+            )
+            self.logger.log(
+                f"  → Not converged yet. ({recent}/2 recent approvals needed)"
+            )
+            # Transition from tech_design to execution_plan phase if in legacy mode
+            if self.state.phase == PHASE_TECH_DESIGN:
+                self.state.phase = PHASE_EXECUTION_PLAN
+
     def _builder_req_build(self, feedback: str | None, req_path: str) -> None:
         """Run requirements builder - writes directly to file."""
         # Feedback is already just the previous round's feedback (not cumulative)
@@ -608,6 +793,10 @@ class Orchestrator:
         if path.exists():
             return path.read_text()
         return ""
+
+    def _calculate_md5(self, content: str) -> str:
+        """Calculate MD5 hash of content."""
+        return hashlib.md5(content.encode()).hexdigest()
 
     def _write_doc(self, path: Path, content: str) -> None:
         """Write document to path with validation."""

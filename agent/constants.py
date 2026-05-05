@@ -3,7 +3,26 @@
 # Phase states
 PHASE_REQUIREMENTS = "requirements"
 PHASE_TECH_DESIGN = "tech_design"
+PHASE_EXECUTION_PLAN = "execution_plan"
 PHASE_DONE = "done"
+
+# Execution mode
+MODE_LEGACY = "legacy"
+MODE_PLAN = "plan"
+
+# Task status
+TASK_STATUS_PENDING = "pending"
+TASK_STATUS_IN_PROGRESS = "in_progress"
+TASK_STATUS_COMPLETED = "completed"
+TASK_STATUS_VERIFICATION_FAILED = "verification_failed"
+TASK_STATUS_BLOCKED = "blocked"
+
+# Verification types
+VERIFICATION_COMMAND_EXECUTION = "command_execution"
+VERIFICATION_FILE_EXISTENCE = "file_existence"
+VERIFICATION_COVERAGE_CHECK = "coverage_check"
+VERIFICATION_MANUAL = "manual"
+VERIFICATION_PHASE_COMPLETION = "phase_completion"
 
 # Convergence
 CONVERGED = True
@@ -48,6 +67,7 @@ TOOL_EDIT_DOC = "edit_doc"
 # File names
 SESSION_STATE_FILE = "session.json"
 REQUIREMENTS_FILE = "requirements.md"
+EXECUTION_PLAN_FILE = "execution-plan.md"
 TECH_DESIGN_FILE = "tech-design.md"
 ITERATION_SUMMARY_FILE = "iteration_summary.md"
 
