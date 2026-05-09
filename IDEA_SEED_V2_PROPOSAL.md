@@ -27,6 +27,9 @@
 | 执行跟踪 | 无 | Plan 状态跟踪 |
 | 增量追加 | 不支持 | `idea-seed append` 支持 |
 | 文档重复 | 大量重复章节 | 消除重复 |
+| Context 管理 | 无压缩机制 | Plan 完成后及时压缩 |
+| 多角色 Review | 只有 Requirements/Tech Reviewer | 新增 Execution Reviewer |
+| 多 Agent | 未使用 team.py | 支持 Plans 并行开发 |
 
 ---
 
@@ -49,7 +52,7 @@
 │       ↓                     ↓        │
 │  Tech-Spec           Tech-Spec      │
 │       ↓                     ↓        │
-│  执行开发               执行开发     │
+│  Execution Reviewer  Execution Reviewer│
 │       ↓                     ↓        │
 │  Done ✓             Blocked ⏸      │
 └─────────────────────────────────────┘
@@ -186,6 +189,16 @@ idea-seed append "增加股票筛选功能，支持按PE、PB筛选" --project �
 4. **用户确认**：展示融合方案
 5. **执行**：创建新的Plan文件
 
+### 增量边界规则
+
+| 场景 | 处理方式 |
+|------|---------|
+| 新功能完全独立 | 新增 Plan，无冲突 |
+| 新功能依赖现有 Plan | 新 Plan depends_on 旧 Plan |
+| 新功能修改现有功能 | 标记旧 Plan 为 superseded，新增 Plan |
+| 新功能与现有冲突 | 用户确认后，旧 Plan 归档 |
+| 新功能复用现有模块 | 在新 Plan 中引用，不重复开发 |
+
 ### 增量追加示例
 
 ```
@@ -280,14 +293,14 @@ src/
               │            │ complete
               │            ▼
               │     ┌──────────────┐
-              │     │   testing    │
+              │     │   testing   │
               │     └──────┬───────┘
-              │            │ pass/fail
+              │            │ pass
               │     ┌──────┴───────┐
               │     │             │
         ┌─────┴─────┐           ▼
         │ blocked   │     ┌──────────┐
-        └───────────┘     │   done   │
+        └───────────┘     │ done ✓  │
                            └──────────┘
 ```
 
@@ -297,9 +310,114 @@ src/
 |------|------|
 | pending | 待开发 |
 | in_progress | 开发中 |
-| testing | 测试中 |
+| testing | 测试/需求验证中 |
 | done | 完成 |
 | blocked | 阻塞（依赖未完成或其他原因） |
+
+---
+
+## 三种 Reviewer 角色
+
+| 角色 | 职责 | 评审内容 |
+|------|------|---------|
+| **Requirements Reviewer** | 评审需求完整性、Plan 拆分合理性 | Requirements 文档 |
+| **Tech-Spec Reviewer** | 评审技术方案可执行性 | 每个 Plan 的 Tech-Spec |
+| **Execution Reviewer** | 评审开发结果是否符合 Tech-Spec（新增） | Plan 执行结果 + 真实需求验证 |
+
+### Execution Reviewer（新增）
+
+v2 新增 Execution Reviewer，负责验证开发结果是否真正解决了用户问题：
+
+```
+## Execution Review 清单
+
+### 功能验收
+- [ ] 所有 Tech-Spec 中的「必须实现」已完成
+- [ ] 所有验收标准（Acceptance Criteria）已通过
+- [ ] 目录结构与 Tech-Spec 一致
+
+### 需求验证
+- [ ] 实现的功能解决了原始需求中的这个问题
+- [ ] 没有引入新的问题
+- [ ] 代码质量符合团队规范
+
+### 测试覆盖
+- [ ] 单元测试覆盖率 > 80%
+- [ ] 边界条件已覆盖
+- [ ] 异常情况已处理
+```
+
+---
+
+## Context 压缩机制
+
+v2 必须解决 Context 膨胀问题。每个 Plan 完成后，立即压缩历史：
+
+### 压缩策略
+
+1. **Plan 完成后**：
+   - 将 Builder/Reviewer 的完整对话保存到 `plans/{plan_id}/transcript/`
+   - 主 Context 只保留：`plan_id`, `status`, `tech_spec_path`, `summary`
+
+2. **Requirements 完成后**：
+   - 将 Requirements 迭代的完整对话保存到 `transcripts/requirements/`
+   - 主 Context 只保留：最终版 Requirements + Plan 清单
+
+3. **auto_compact 触发**：
+   - 当 Context 超过 TOKEN_THRESHOLD 时自动压缩
+   - 压缩后的 summary 保存到 `.transcripts/`
+
+### 压缩后的 Context 结构
+
+```
+# 主 Context（轻量）
+requirements: "完整的 requirements.md 内容"
+plans:
+  - id: plan-001
+    feature: xxx
+    status: done
+    tech_spec: plans/plan-001/tech-spec.md
+    summary: "实现了Cookie刷新，测试通过"
+  - id: plan-002
+    ...
+```
+
+---
+
+## 多 Agent 并行开发
+
+利用现有的 `team.py`（TeammateManager + MessageBus）实现 Plans 并行开发：
+
+### 架构
+
+```
+┌──────────────────────────────────────────────────┐
+│                  Orchestrator                     │
+│  (管理 Plan 队列、状态、依赖关系)                   │
+└─────────────────┬────────────────────────────────┘
+                  │
+        ┌─────────┼─────────┐
+        │         │         │
+        ▼         ▼         ▼
+   ┌────────┐ ┌────────┐ ┌────────┐
+   │Builder-A│ │Builder-B│ │Builder-C│
+   │plan-001 │ │plan-002 │ │plan-003 │
+   └────┬───┘ └────┬───┘ └────┬───┘
+        │         │         │
+        └─────────┼─────────┘
+                  │
+                  ▼
+           ┌────────────┐
+           │  MessageBus │
+           └────────────┘
+```
+
+### 并行规则
+
+- 无依赖关系的 Plan 可以并行开发
+- 有依赖关系的 Plan 必须串行（依赖方等待被依赖方完成）
+- 每个 Builder 是独立的 Agent，有自己的 Context
+- Orchestrator 负责协调和状态汇总
 
 ---
 
@@ -308,17 +426,20 @@ src/
 ### Phase 1: 核心循环
 1. Plan/Plans 数据结构
 2. Requirements → Plans 自动拆分
-3. 单Plan的 Tech-Spec 生成循环
+3. 单 Plan 的 Tech-Spec 生成循环
 4. Plan 状态跟踪
+5. 修复 v1 的 P0 bug（收敛逻辑、写入验证）
 
 ### Phase 2: 增量能力
-5. `append` 命令实现
-6. 增量融合逻辑
+6. `append` 命令实现
+7. 增量融合逻辑（含边界判断规则）
+8. Execution Reviewer 实现
 
 ### Phase 3: 增强功能
-7. 执行历史记录
-8. 阻塞依赖可视化
-9. 统计与报告
+9. Context 压缩机制
+10. 多 Agent 并行开发（利用 team.py）
+11. 阻塞依赖可视化
+12. 统计与报告
 
 ---
 
@@ -347,12 +468,16 @@ PROMPT_TEMPLATE = """
 ## 当前状态
 {status}
 
+## 项目现状（已完成的Plans）
+{completed_plans}
+
 ## 你的任务
 1. 阅读 Tech-Spec
-2. 规划开发步骤
-3. 执行开发
-4. 验证结果
-5. 更新 Plan 状态为 done
+2. 评估是否可复用现有模块
+3. 规划开发步骤
+4. 执行开发
+5. 运行 Execution Review
+6. 更新 Plan 状态
 
 开始执行。
 """
@@ -366,3 +491,5 @@ PROMPT_TEMPLATE = """
 2. **冲突处理**：追加需求与现有Plan冲突时如何处理？
 3. **归档策略**：废弃的Plan是删除还是归档？
 4. **多Agent并行**：多个Plan是否可以并行开发？
+5. **Execution Reviewer 触发时机**：开发完成后自动触发还是手动触发？
+6. **Context 压缩边界**：哪些信息必须保留，哪些可以压缩？
