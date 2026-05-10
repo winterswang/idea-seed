@@ -22,6 +22,7 @@ from agent.plan_compact import PlanContextCompressor
 from agent.tech_spec_generator import TechSpecGenerator
 from agent.readme_generator import ReadmeGenerator
 from agent.review import ReviewAnalyzer
+from agent.plan_reviewer_prompts import PLAN_REVIEWER_SYSTEM, PLAN_REVIEWER_PROMPT
 
 
 class V2WorkflowError(Exception):
@@ -75,25 +76,148 @@ class V2Workflow:
         self.logger.log(f"Loaded requirements: {len(requirements)} chars")
 
         # Step 2: Split requirements into Plans
-        self.logger.log("\n[1/4] Splitting requirements into Plans...")
+        self.logger.log("\n[1/5] Splitting requirements into Plans...")
         existing_plans = self.plan_manager.load_plans()
         splitted = self.plan_splitter.split(requirements, existing_plans)
 
-        # Step 3: Convert splitted plans to Plan objects and save
-        self.logger.log(f"\n[2/4] Creating {len(splitted)} Plans...")
+        # Step 3: Plan Review — verify split quality
+        self.logger.log(f"\n[2/5] Reviewing Plan split ({len(splitted)} plans)...")
+        splitted = self._review_plan_split(requirements, splitted, existing_plans)
+
+        # Step 4: Convert splitted plans to Plan objects and save
+        self.logger.log(f"\n[3/5] Creating {len(splitted)} Plans...")
         plans = self._create_plans_from_splitted(splitted, existing_plans)
 
-        # Step 4: Generate Tech-Spec for each Plan
-        self.logger.log(f"\n[3/4] Generating Tech-Spec for each Plan...")
+        # Step 5: Generate Tech-Spec for each Plan
+        self.logger.log(f"\n[4/5] Generating Tech-Spec for each Plan...")
         self._generate_tech_specs_for_plans(plans, requirements)
 
-        # Step 5: Update README
-        self.logger.log("\n[4/4] Updating README...")
+        # Step 6: Update README
+        self.logger.log("\n[5/5] Updating README...")
         self.readme_generator.update_readme(self.project_dir, plans)
 
         self.logger.log("\n✅ Plans phase complete!")
         self.logger.log(f"   Created {len(plans)} Plans")
         self.logger.log(f"   README updated at: {self.project_dir / 'README.md'}")
+
+    def _review_plan_split(
+        self,
+        requirements: str,
+        splitted: list[SplittedPlan],
+        existing_plans: list[Plan],
+        max_rounds: int = 3,
+    ) -> list[SplittedPlan]:
+        """Review and iterate on Plan splitting quality.
+
+        Runs the Plan Reviewer against the split results. If reviewer
+        identifies gaps or overlaps, attempts re-split with LLM feedback.
+        Iterates until convergence or max_rounds.
+
+        Returns:
+            Validated list of SplittedPlan objects
+        """
+        from agent.subagent import run_subagent
+
+        consecutive_approvals = 0
+        previous_feedback = None
+
+        for round_num in range(1, max_rounds + 1):
+            # Build plans summary for reviewer
+            plans_text = self._format_plans_for_review(splitted)
+
+            # Run plan reviewer
+            prompt = PLAN_REVIEWER_PROMPT.format(
+                seed=self.orch.state.seed,
+                requirements=requirements[:3000],  # Limit for review
+                plans_list=plans_text,
+            )
+
+            self.logger.log(f"    Plan Review Round {round_num}/{max_rounds}...")
+            result_text, _ = run_subagent(
+                prompt=prompt,
+                system=PLAN_REVIEWER_SYSTEM,
+                max_tokens=4000,
+                phase="plan-review",
+                round_num=round_num,
+            )
+
+            # Analyze result
+            review = self.review_analyzer.analyze(result_text)
+
+            if review.approved:
+                consecutive_approvals += 1
+                self.logger.log(f"      ✅ Plan review APPROVED ({consecutive_approvals}/2)")
+                if consecutive_approvals >= 2:
+                    break
+            else:
+                consecutive_approvals = 0
+                self.logger.log(f"      ❌ Plan review: NEEDS WORK")
+                previous_feedback = review.raw_feedback
+
+                # Attempt LLM-based re-split with feedback
+                try:
+                    re_split_prompt = self.plan_splitter.generate_split_prompt(
+                        requirements, existing_plans
+                    )
+                    re_split_prompt += f"\n\n## Previous Review Feedback\n{previous_feedback}\n\nPlease re-split addressing the feedback above."
+
+                    new_summary, _ = run_subagent(
+                        prompt=re_split_prompt,
+                        system="You are a Plan Split expert. Output a JSON array of plans.",
+                        max_tokens=4000,
+                        phase="plan-re-split",
+                        round_num=round_num,
+                    )
+                    # Parse new plans from LLM output
+                    new_splitted = self._parse_llm_plans(new_summary, existing_plans)
+                    if new_splitted:
+                        splitted = new_splitted
+                        self.logger.log(f"      → Re-split into {len(splitted)} plans")
+                except Exception as e:
+                    self.logger.log(f"      ⚠️ Re-split failed: {e}, keeping original split")
+
+        # Final validation warning
+        if consecutive_approvals < 2:
+            self.logger.log(f"    ⚠️ Plan review did not converge, proceeding with {len(splitted)} plans")
+
+        return splitted
+
+    def _format_plans_for_review(self, splitted: list) -> str:
+        """Format splitted plans as text for reviewer."""
+        lines = []
+        for i, sp in enumerate(splitted, 1):
+            lines.append(f"Plan {i}: {sp.feature} [{sp.priority.value}]")
+            if sp.description:
+                lines.append(f"  描述: {sp.description[:150]}")
+            if sp.acceptance_criteria:
+                lines.append(f"  验收: {len(sp.acceptance_criteria)} criteria")
+            if sp.depends_on:
+                lines.append(f"  依赖: {', '.join(sp.depends_on)}")
+        return "\n".join(lines)
+
+    def _parse_llm_plans(self, text: str, existing: list) -> list:
+        """Parse LLM-generated plan list from JSON in text."""
+        import json, re
+        # Try to find JSON array in the response
+        m = re.search(r'\[\s*\{.*?\}\s*\]', text, re.DOTALL)
+        if m:
+            try:
+                data = json.loads(m.group(0))
+                return [
+                    SplittedPlan(
+                        feature=p.get("feature", p.get("name", "Unknown")),
+                        description=p.get("description", ""),
+                        priority=Priority(p.get("priority", "P1")),
+                        depends_on=p.get("depends_on", []),
+                        acceptance_criteria=p.get("acceptance_criteria", []),
+                        tasks=p.get("tasks", []),
+                    )
+                    for p in data
+                ]
+            except (json.JSONDecodeError, ValueError):
+                pass
+        return []  # Fallback: keep original split
+
 
     def _create_plans_from_splitted(
         self,
