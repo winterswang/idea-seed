@@ -81,6 +81,7 @@ class PlanManager:
             CycleDetectedError: If dependency cycle detected
             PlanNotFoundError: If referenced plan doesn't exist
         """
+        self._normalize_depends_on(plans)
         self._validate_plans(plans)
 
         data = {"plans": [p.to_dict() for p in plans]}
