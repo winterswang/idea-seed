@@ -23,6 +23,14 @@ Key requirements:
 - Include task list that Claude Code can execute directly
 - Data entities must be clearly defined with types
 - Non-functional requirements (performance, security, availability) must be specified
+
+## SCOPE DISCIPLINE
+- Focus on P0 and P1 features ONLY. P2 features go to "Out of Scope / Future".
+- Target: 5-8 core features, <= 12 total sections in 功能需求
+- Task list: <= 20 items total across all priorities
+- Document length: 300-800 lines (not 2000+)
+- If the seed idea is simple, keep the document proportionally simple
+- Do NOT add enterprise-level complexity (RBAC, audit logs, API gateways) unless the seed explicitly calls for it
 """
 )
 
@@ -37,22 +45,25 @@ BUILDER_REQ_PROMPT = """
 You are a requirements analyst. Generate the COMPLETE requirements.md content.
 
 ## CRITICAL INSTRUCTIONS
-1. The requirements document header MUST include the ORIGINAL seed idea exactly as provided above
-2. Do NOT modify, simplify, or rephrase the seed idea - copy it verbatim
-3. The document should be hundreds of lines, not a brief outline
-4. Include ALL sections from OUTPUT_SPEC.md:
+1. The FIRST LINE of the file MUST be exactly: # 需求文档：{seed}  (the seed idea verbatim)
+2. Do NOT add a "文档信息" table, metadata, version number, or date — these are auto-generated
+3. Do NOT fabricate dates like "2024-01-15" — omit dates entirely or write "当前日期"
+4. Do NOT modify, simplify, or rephrase the seed idea - copy it verbatim
+5. The document should be detailed but proportional to the seed idea (300-800 lines)
+6. Include ALL sections from OUTPUT_SPEC.md:
    - 项目概述 (core value, target users, success criteria)
    - 功能需求 (features with user stories and [ ] acceptance criteria)
    - 数据需求 (data entities)
    - 非功能需求 (performance, security, availability)
    - Out of Scope
-   - 任务清单 (task list)
+   - 任务清单 (task list, <= 20 items)
+7. Focus on core functionality. Do NOT add enterprise features (RBAC, audit logs, API gateways) unless the seed explicitly asks for them.
 
 ## Output
 Write the COMPLETE requirements.md content to the file at this path:
 `{req_path}`
 
-Use the write_file tool to write the complete content directly. The file should start with "# 需求文档：" followed by the ORIGINAL seed idea in a blockquote, then include every section in full detail. Make sure the content is comprehensive (hundreds of lines).
+Use the write_file tool to write the complete content directly. First line must be "# 需求文档：{seed}" — no exceptions.
 """
 
 BUILDER_DESIGN_SYSTEM = (
@@ -118,6 +129,13 @@ You review requirements documents for:
 4. Format compliance - does it follow OUTPUT_SPEC.md structure?
 
 Provide actionable feedback that helps improve the document.
+
+## PASS RULE
+- If your feedback contains ONLY "建议" (suggestions / nice-to-haves / low-priority improvements)
+  and has NO blocking issues (missing sections, wrong format, broken requirements, contradictions),
+  the result MUST be **通过** (pass).
+- Use "需修改" / "不通过" ONLY when there is a genuine blocking issue.
+- A document that is essentially correct but could be polished = 通过.
 """
 )
 
@@ -170,6 +188,8 @@ REVIEWER_REQ_PROMPT = """
 1. 具体可操作的建议
 2. ...
 ```
+
+Remember: if there are no blocking issues, use **通过** even if you have minor suggestions.
 """
 
 REVIEWER_DESIGN_SYSTEM = (
@@ -183,6 +203,11 @@ You review technical design documents for:
 4. Format compliance - does it follow OUTPUT_SPEC.md structure?
 
 Provide actionable feedback that helps improve the document.
+
+## PASS RULE
+- If your feedback contains ONLY suggestions/nice-to-haves without blocking issues,
+  the result MUST be **通过** (pass).
+- Use "需修改" ONLY when there is a genuine blocking issue.
 """
 )
 
