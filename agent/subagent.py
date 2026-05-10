@@ -56,6 +56,7 @@ def run_subagent(
     """
     _logger = logging.getLogger("idea-seed")
     _logger.info(f"[SUBAGENT] Starting subagent | phase={phase} round={round_num} max_tokens={max_tokens}")
+    _logger.info(f"[SUBAGENT] System prompt: {len(system)} chars, Tools: {len(str(active_tools))} chars")
     _logger.info(f"[SUBAGENT] Prompt length: {len(prompt)} chars, System length: {len(system)} chars")
 
     client = create_client()
@@ -92,7 +93,7 @@ def run_subagent(
                 sub_messages = compact_if_needed(sub_messages, threshold=TOKEN_THRESHOLD)
             try:
                 est_tokens = estimate_tokens(sub_messages)
-                _logger.info(f"[SUBAGENT] Calling API | model={MODEL_ID} | messages={len(sub_messages)} | est_tokens=~{est_tokens} | tools={len(active_tools)} | timeout={API_TIMEOUT}s")
+                _logger.info(f"[SUBAGENT] Calling API | model={MODEL_ID} | messages={len(sub_messages)} | prompt_chars={len(system)+len(str(sub_messages))} | est_tokens=~{est_tokens} | max_tokens={max_tokens} | stream=True")
                 api_start = time.time()
 
                 # Start heartbeat thread for long-running API calls
@@ -139,7 +140,10 @@ def run_subagent(
                         )
 
                 sub_messages.append({"role": "assistant", "content": response.content})
-                _logger.info(f"[SUBAGENT] Response content length: {len(str(response.content))} chars | blocks: {len(response.content) if isinstance(response.content, list) else 'N/A'}")
+                _logger.info(f"[SUBAGENT] Response content length: {len(str(response.content))} chars | blocks: {len(response.content) if isinstance(response.content, list) else 0}")
+                if isinstance(response.content, list):
+                    types = ' '.join(getattr(b, 'type', '?') for b in response.content)
+                    _logger.info(f"[SUBAGENT] Block types: [{types}]")
 
                 # Layer 1: Micro compression after each response
                 if compact_enabled:
