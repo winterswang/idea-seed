@@ -153,13 +153,22 @@ def run_subagent(
                     if before_compact != after_compact:
                         _logger.info(f"[SUBAGENT] Micro compression | before={before_compact} after={after_compact}")
 
-                # Detect empty response (minimax bug: 0 tokens + stop_reason=None)
+                # Detect empty response - check block content (minimax thinking blocks)
                 output_tokens = response.usage.output_tokens if hasattr(response, 'usage') and response.usage else 0
                 total_api_calls += 1
                 if response.stop_reason is None and output_tokens == 0:
-                    zero_token_count += 1
-                    _logger.warning(f"[SUBAGENT] Empty response (0 output tokens) — retrying [{zero_token_count} 0-token calls, {total_api_calls} total]")
-                    raise RuntimeError("Empty response from API (0 output tokens)")
+                    blocks = response.content if isinstance(response.content, list) else []
+                    has_content = any(
+                        (hasattr(b, 'text') and b.text) or
+                        (hasattr(b, 'thinking') and b.thinking)
+                        for b in blocks
+                    )
+                    if not has_content:
+                        zero_token_count += 1
+                        _logger.warning(f"[SUBAGENT] Truly empty [{zero_token_count}/{total_api_calls}]")
+                        raise RuntimeError("Empty response (all blocks empty)")
+                    else:
+                        _logger.info("[SUBAGENT] Content in thinking blocks - proceeding")
 
                 if response.stop_reason != "tool_use":
                     _logger.info(f"[SUBAGENT] Stop reason: {response.stop_reason} (not tool_use)")
