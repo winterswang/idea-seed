@@ -30,6 +30,7 @@ from agent.token_tracker import TokenTracker
 from agent.state_manager import StateManager
 from agent.prompts import (
     BUILDER_REQ_SYSTEM,
+    BUILDER_REQ_SYSTEM_METHODOLOGY,
     BUILDER_REQ_PROMPT,
     BUILDER_DESIGN_SYSTEM,
     BUILDER_DESIGN_PROMPT,
@@ -166,6 +167,7 @@ class Orchestrator:
         max_rounds: int | None = None,
         enable_token_tracking: bool = True,
         mode: str = MODE_LEGACY,
+        style: str = "dev-doc",
     ) -> None:
         """
         Initialize orchestrator.
@@ -180,6 +182,7 @@ class Orchestrator:
         from agent.config import MAX_ROUNDS
 
         self.mode = mode
+        self.style = style
         self.max_rounds = max_rounds if max_rounds is not None else MAX_ROUNDS
 
         # Initialize state directory first (needed for StateManager)
@@ -781,7 +784,7 @@ class Orchestrator:
         # Subagent writes directly to file, returns confirmation message
         run_subagent(
             prompt=prompt,
-            system=BUILDER_REQ_SYSTEM,
+            system=BUILDER_REQ_SYSTEM_METHODOLOGY if self.style == "methodology" else BUILDER_REQ_SYSTEM,
             token_tracker=self.token_tracker,
             phase="requirements",
             round_num=self.state.req_round,

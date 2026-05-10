@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 from agent.plan import Plan
-from agent.constants import TECH_SPEC_REVIEW_CONTENT_LIMIT, FALLBACK_REQUIREMENTS_LIMIT
+from agent.constants import TECH_SPEC_REVIEW_CONTENT_LIMIT, FALLBACK_REQUIREMENTS_LIMIT, TECH_SPEC_MAX_TOKENS
 from agent.review import ReviewAnalyzer
 from agent.subagent import run_subagent
 
@@ -194,6 +194,7 @@ class TechSpecGenerator:
                 prompt=prompt,
                 system=TECH_SPEC_BUILDER_SYSTEM,
                 token_tracker=token_tracker,
+                max_tokens=TECH_SPEC_MAX_TOKENS,
                 phase=f"tech-spec-{plan.plan_id}",
                 round_num=round_num,
             )
@@ -226,6 +227,7 @@ class TechSpecGenerator:
                 prompt=review_prompt,
                 system=TECH_SPEC_REVIEWER_SYSTEM,
                 token_tracker=token_tracker,
+                max_tokens=TECH_SPEC_MAX_TOKENS,
                 phase=f"tech-spec-{plan.plan_id}",
                 round_num=round_num,
             )

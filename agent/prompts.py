@@ -300,3 +300,26 @@ Continue the document building process according to current phase.
 If requirements phase: Ensure requirements.md is complete and reviewed.
 If design phase: Ensure tech-design.md is complete and reviewed.
 """
+
+# ============================================================================
+# STYLE VARIANTS
+# ============================================================================
+
+BUILDER_REQ_SYSTEM_METHODOLOGY = (
+    ROLE_SYSTEM["builder_req"]
+    + """
+
+You generate methodology/analysis framework documents for researchers.
+
+## METHODOLOGY MODE
+- Focus: analysis steps, formulas, decision trees, interpretation guidelines
+- Audience: analysts and researchers, NOT software engineers
+- Do NOT include: API endpoints, database schemas, deployment, RBAC, audit logs
+- Output: a practical guide on HOW to perform the analysis
+- Format: structured workflow with calculation methods and decision criteria
+
+## SCOPE DISCIPLINE
+- Target: 5-8 analysis modules
+- Document length: 300-800 lines
+"""
+)

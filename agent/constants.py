@@ -104,3 +104,9 @@ SHELL_OUTPUT_TRUNCATION = 50000
 
 # Bash command timeout in seconds
 BASH_TIMEOUT_SECONDS = 120
+
+# Tech spec generation: smaller max_tokens to avoid model timeout/0-token issues
+TECH_SPEC_MAX_TOKENS = 32000
+
+# Tech spec generation: max tokens (smaller than requirements to avoid model issues)
+TECH_SPEC_MAX_TOKENS = 32000

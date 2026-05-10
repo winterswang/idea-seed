@@ -38,6 +38,7 @@ def run_seed_mode_args() -> None:
     parser.add_argument("--provider", choices=["minimax", "aliyun", "bytedance"])
     parser.add_argument("--max-rounds", type=int)
     parser.add_argument("--mode", choices=["legacy", "plan"], default="legacy")
+    parser.add_argument("--style", choices=["dev-doc", "methodology"], default="dev-doc")
 
     args, _ = parser.parse_known_args()
 
@@ -68,6 +69,7 @@ def run_seed_mode_args() -> None:
         resume=args.resume,
         max_rounds=args.max_rounds,
         mode=args.mode,
+        style=args.style,
     )
     orchestrator.run()
 
@@ -119,6 +121,12 @@ def main() -> None:
         choices=["legacy", "plan"],
         default="legacy",
         help="Execution mode: 'legacy' or 'plan'",
+    )
+    parser.add_argument(
+        "--style",
+        choices=["dev-doc", "methodology"],
+        default="dev-doc",
+        help="Output style: 'dev-doc' (system spec) or 'methodology' (analysis framework)",
     )
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
@@ -178,6 +186,7 @@ def main() -> None:
         resume=args.resume,
         max_rounds=args.max_rounds,
         mode=args.mode,
+        style=args.style,
     )
     orchestrator.run()
 
