@@ -120,8 +120,6 @@ class V2Workflow:
 
         consecutive_approvals = 0
         previous_feedback = None
-        re_split_attempts = 0
-
         for round_num in range(1, max_rounds + 1):
             # Build plans summary for reviewer
             plans_text = self._format_plans_for_review(splitted)
@@ -198,28 +196,6 @@ class V2Workflow:
                 lines.append(f"  依赖: {', '.join(sp.depends_on)}")
         return "\n".join(lines)
 
-    def _parse_llm_plans(self, text: str, existing: list) -> list:
-        """Parse LLM-generated plan list from JSON in text."""
-        import json, re
-        # Try to find JSON array in the response
-        m = re.search(r'\[\s*\{.*?\}\s*\]', text, re.DOTALL)
-        if m:
-            try:
-                data = json.loads(m.group(0))
-                return [
-                    SplittedPlan(
-                        feature=p.get("feature", p.get("name", "Unknown")),
-                        description=p.get("description", ""),
-                        priority=Priority(p.get("priority", "P1")),
-                        depends_on=p.get("depends_on", []),
-                        acceptance_criteria=p.get("acceptance_criteria", []),
-                        tasks=p.get("tasks", []),
-                    )
-                    for p in data
-                ]
-            except (json.JSONDecodeError, ValueError):
-                pass
-        return []  # Fallback: keep original split
 
 
     def _create_plans_from_splitted(
