@@ -56,7 +56,6 @@ def run_subagent(
     """
     _logger = logging.getLogger("idea-seed")
     _logger.info(f"[SUBAGENT] Starting subagent | phase={phase} round={round_num} max_tokens={max_tokens}")
-    _logger.info(f"[SUBAGENT] System prompt: {len(system)} chars, Tools: {len(str(active_tools))} chars")
     _logger.info(f"[SUBAGENT] Prompt length: {len(prompt)} chars, System length: {len(system)} chars")
 
     client = create_client()
@@ -66,6 +65,7 @@ def run_subagent(
     SUBAGENT_TOTAL_TIMEOUT = 3600  # 1 hour total timeout
     sub_messages = [{"role": "user", "content": prompt}]
     active_tools = tools if tools is not None else TOOL_SCHEMAS
+    _logger.info(f"[SUBAGENT] System prompt: {len(system)} chars, Tools: {len(str(active_tools))} chars")
 
     # Get handlers for active tools (exclude 'task' to prevent recursion)
     tool_handlers = {}
