@@ -135,6 +135,7 @@ def main() -> None:
     review_parser.add_argument("plan_id", help="Plan ID")
     review_parser.add_argument("--stage", choices=["dev", "test", "release", "blocked"])
     review_parser.add_argument("--status", choices=["pending", "in_progress", "done", "blocked"])
+    review_parser.add_argument("--verify", action="store_true", help="Run Execution Reviewer")
 
     # plans command
     plans_parser = subparsers.add_parser("plans", help="List plans")
@@ -242,6 +243,22 @@ def handle_review(args) -> None:
     print(f"Blocks: {plan.blocks or 'none'}")
     print(f"Summary: {plan.summary or '(none)'}")
     print(f"{'='*60}\n")
+
+    if args.verify:
+        from agent.execution_reviewer import ExecutionReviewer
+        er = ExecutionReviewer(project_dir)
+        try:
+            report = er.verify_plan(args.plan_id)
+            print(report.to_markdown())
+            if report.passed:
+                er.mark_done(args.plan_id)
+                print(f"\nUpdated {args.plan_id} to DONE/RELEASE")
+            else:
+                er.mark_failed(args.plan_id)
+                print(f"\nUpdated {args.plan_id} to BLOCKED")
+        except Exception as e:
+            print(f"Verification error: {e}")
+        return
 
     if args.stage:
         try:
