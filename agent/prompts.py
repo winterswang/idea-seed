@@ -48,9 +48,6 @@ You are a requirements analyst. Generate the COMPLETE requirements.md content.
    - Out of Scope
    - 任务清单 (task list)
 
-## Previous Feedback to Address
-{previous_feedback}
-
 ## Output
 Write the COMPLETE requirements.md content to the file at this path:
 `{req_path}`

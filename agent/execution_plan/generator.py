@@ -79,14 +79,16 @@ class ExecutionPlanGenerator:
 
         system = BUILDER_EXECUTION_PLAN_SYSTEM
 
-        response = self._call_llm(prompt, system)
+        response = self._call_llm(prompt, system, output_path)
 
-        # Write to file
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(output_path, "w") as f:
-            f.write(response)
+        # If file was properly written by subagent, trust it
+        # Otherwise write the response
+        if not output_path.exists() or len(output_path.read_text()) < 500:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(output_path, "w") as f:
+                f.write(response)
 
-        return response
+        return output_path.read_text() if output_path.exists() else response
 
     def _generate_revision(
         self,
@@ -104,20 +106,22 @@ class ExecutionPlanGenerator:
 
         system = BUILDER_EXECUTION_PLAN_SYSTEM
 
-        response = self._call_llm(prompt, system)
+        response = self._call_llm(prompt, system, output_path)
 
-        # Write to file
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(output_path, "w") as f:
-            f.write(response)
+        # If file was properly written by subagent, trust it
+        # Otherwise write the response
+        if not output_path.exists() or len(output_path.read_text()) < 500:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(output_path, "w") as f:
+                f.write(response)
 
-        return response
+        return output_path.read_text() if output_path.exists() else response
 
-    def _call_llm(self, prompt: str, system: str) -> str:
+    def _call_llm(self, prompt: str, system: str, output_path: Path) -> str:
         """Call LLM to generate content."""
         from agent.subagent import run_subagent
 
-        response = run_subagent(
+        summary, _ = run_subagent(
             prompt=prompt,
             system=system,
             phase="execution_plan",
@@ -125,7 +129,15 @@ class ExecutionPlanGenerator:
             compact_enabled=False,
         )
 
-        return response
+        # Read the actual file content that was written
+        # The subagent writes the execution plan directly to output_path
+        if output_path.exists():
+            content = output_path.read_text()
+            if len(content) > 500:
+                return content
+
+        # Fallback to summary if file is empty or too short
+        return summary
 
     def _parse_markdown(self, markdown_content: str) -> ExecutionPlan:
         """Parse markdown content into ExecutionPlan object."""
@@ -140,6 +152,12 @@ class ExecutionPlanGenerator:
         tasks = self._extract_tasks(markdown_content)
         plan.tasks = tasks
         plan.total_tasks = len(tasks)
+
+        # If no tasks extracted from structured format, try to parse from summary
+        if len(tasks) == 0 and len(markdown_content) > 200:
+            tasks = self._extract_tasks_from_summary(markdown_content)
+            plan.tasks = tasks
+            plan.total_tasks = len(tasks)
 
         # Extract checkpoints
         checkpoints = self._extract_checkpoints(markdown_content)
@@ -175,6 +193,36 @@ class ExecutionPlanGenerator:
             elif current_phase and not line.strip():
                 # Empty line after phase name - accumulate description
                 pass
+
+        # Fallback: extract phases from table format
+        if len(phases) == 0:
+            phases = self._extract_phases_from_table(markdown)
+
+        return phases
+
+    def _extract_phases_from_table(self, markdown: str) -> list[Phase]:
+        """Extract phases from table format when structured format fails."""
+        phases = []
+        lines = markdown.split("\n")
+
+        for line in lines:
+            # Match table rows like "| Phase 1 | 基础架构搭建 | 4 | 目录结构、数据库设计 |"
+            if line.startswith("|") and "Phase" in line:
+                # Skip header row
+                if "名称" in line or "任务数" in line:
+                    continue
+                parts = [p.strip() for p in line.split("|")]
+                if len(parts) >= 3:
+                    # phase_num = parts[1].strip()
+                    phase_name = parts[2].strip() if len(parts) > 2 else ""
+                    if phase_name:
+                        phase = Phase(
+                            id=f"phase-{len(phases) + 1}",
+                            name=phase_name,
+                            description=f"Phase from table: {phase_name}",
+                            order=len(phases),
+                        )
+                        phases.append(phase)
 
         return phases
 
@@ -212,6 +260,73 @@ class ExecutionPlanGenerator:
                     elif "**依赖**:" in line or "**Dependencies**:" in line:
                         deps = self._extract_value(line)
                         current_task.depends_on = self._parse_dependencies(deps)
+
+        return tasks
+
+    def _extract_tasks_from_summary(self, markdown: str) -> list[Task]:
+        """Extract tasks from summary format when structured format fails."""
+        tasks = []
+        lines = markdown.split("\n")
+
+        # Parse table format: | Phase | 名称 | 任务数 | 关键内容 |
+        phases_data = []
+        for line in lines:
+            # Match table rows like "| Phase 1 | 基础架构搭建 | 4 | 目录结构、数据库设计 |"
+            if line.startswith("|") and "Phase" in line and "任务数" in line:
+                continue  # Skip header row
+            if line.startswith("|") and "Phase" in line and "｜" in line or "|" in line:
+                parts = [p.strip() for p in line.split("|")]
+                if len(parts) >= 4:
+                    phase_name = parts[1].replace("Phase", "").replace("Phase", "").strip()
+                    if phase_name and phase_name[0].isdigit():
+                        phases_data.append({
+                            "name": parts[2].strip() if len(parts) > 2 else phase_name,
+                            "task_count": int(parts[3].strip()) if len(parts) > 3 and parts[3].strip().isdigit() else 0
+                        })
+
+        # If we found phases from table, create tasks
+        if phases_data:
+            task_num = 0
+            for phase in phases_data:
+                for i in range(phase["task_count"]):
+                    task_num += 1
+                    task = Task(
+                        id=f"task-{task_num}",
+                        name=f"Task in {phase['name']}",
+                        description=f"任务 in phase: {phase['name']}",
+                        phase=phase["name"],
+                        priority=0,
+                        verification_type=VerificationType.COMMAND_EXECUTION,
+                        depends_on=[],
+                    )
+                    tasks.append(task)
+
+        # Fallback: also look for P0/P1/P2 task counts in bullet points
+        if len(tasks) == 0:
+            current_phase = ""
+            task_num = 0
+            for line in lines:
+                if "Phase" in line and ("｜" in line or "|" in line):
+                    parts = line.split("|")
+                    if len(parts) >= 3:
+                        current_phase = parts[2].strip()
+
+                if "P0" in line and "任务" in line:
+                    match = re.search(r'P0.*?(\d+)', line)
+                    if match:
+                        count = int(match.group(1))
+                        for i in range(count):
+                            task_num += 1
+                            task = Task(
+                                id=f"task-{task_num}",
+                                name=f"Phase task",
+                                description=f"P0 priority task from {current_phase}",
+                                phase=current_phase,
+                                priority=0,
+                                verification_type=VerificationType.COMMAND_EXECUTION,
+                                depends_on=[],
+                            )
+                            tasks.append(task)
 
         return tasks
 

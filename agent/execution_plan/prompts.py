@@ -64,9 +64,10 @@ Define checkpoints for each phase:
 
 ## Output Format
 
-Write the execution plan to: {output_path}
+Write the COMPLETE execution plan to: {output_path}
 
-The document should follow this structure:
+Use the write_file tool to write the complete document. The document MUST follow this EXACT markdown format:
+
 ```markdown
 # 执行计划
 
@@ -75,35 +76,51 @@ The document should follow this structure:
 
 ## 2. 阶段划分
 ### Phase 1: [Name]
-[Description]
-Tasks: [list of task IDs]
-Checkpoint: [checkpoint ID]
+[Description of this phase]
+
+Tasks: task-1-1, task-1-2, ...
+Checkpoint: cp-1
 
 ### Phase 2: [Name]
+[Description]
 ...
 
 ## 3. 任务详情
-### Task X-Y: [Name]
-- **描述**: [what to do]
-- **优先级**: P0/P1/P2
-- **验证类型**: [verification type]
-- **验证配置**: [specific config]
-- **依赖**: [list of dependent task IDs]
-- **预估时长**: [duration]
+### Task task-1-1: [Name]
+- **描述**: [Detailed description of what to do, specific and actionable]
+- **优先级**: P0
+- **验证类型**: command_execution
+- **验证配置**: [specific command to run, e.g., "pytest tests/test_phase1.py"]
+- **依赖**: none
+- **预估时长**: 4h
+
+### Task task-1-2: [Name]
+... [continue all tasks]
 
 ## 4. 检查点
-### Checkpoint X: [Name]
-- **验证任务**: [list of task IDs]
-- **验证方式**: [how to verify]
+### Checkpoint cp-1: [Name]
+- **验证任务**: task-1-1, task-1-2
+- **验证方式**: [how to verify completion]
 ```
 
-## Quality Checklist
+## MANDATORY REQUIREMENTS
 
-Before finalizing, verify:
-- [ ] All tasks have verification配置
+1. Use write_file tool with path="{output_path}"
+2. Write ALL tasks - do NOT skip any task or use placeholder
+3. Each task MUST have: 描述, 优先级, 验证类型, 验证配置, 依赖, 预估时长
+4. Document must be 500+ lines for 20+ tasks
+5. Do NOT write a summary in your text response - write the COMPLETE document using write_file
+
+Your text response after calling write_file should be brief confirmation only.
+
+## Quality Checklist - MANDATORY
+
+Before calling write_file, verify:
+- [ ] ALL tasks use "### Task task-X-Y:" format
+- [ ] ALL tasks have ALL 6 fields: 描述, 优先级, 验证类型, 验证配置, 依赖, 预估时长
 - [ ] No circular dependencies
 - [ ] Each phase has a checkpoint
-- [ ] Task descriptions are actionable (not vague)
+- [ ] Task descriptions are specific and actionable
 - [ ] Dependencies reflect true ordering constraints
 
 ## Feedback from Previous Iteration
