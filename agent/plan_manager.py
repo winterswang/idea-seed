@@ -58,7 +58,16 @@ class PlanManager:
         try:
             with open(self.plans_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            return [Plan.from_dict(p) for p in data.get("plans", [])]
+            plans = [Plan.from_dict(p) for p in data.get("plans", [])]
+            # Normalize depends_on IDs (LLM may output plan-01 instead of plan-001)
+            for plan in plans:
+                plan.depends_on = [
+                    f"plan-{d.split('-')[-1].zfill(3)}"
+                    if d.startswith("plan-") and len(d.split("-")[-1]) < 3
+                    else d
+                    for d in plan.depends_on
+                ]
+            return plans
         except (json.JSONDecodeError, KeyError) as e:
             raise PlanManagerError(f"Failed to parse plans.json: {e}") from e
 
@@ -82,6 +91,10 @@ class PlanManager:
         with open(temp_file, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
         temp_file.rename(self.plans_file)
+
+    def _normalize_depends_on(self, plans):
+        for plan in plans:
+            plan.depends_on = [d if not d.startswith("plan-") or len(d.split("-")[-1]) >= 3 else "plan-" + d.split("-")[-1].zfill(3) for d in plan.depends_on]
 
     def _validate_plans(self, plans: list[Plan]) -> None:
         """Validate plan list for cycles and referential integrity.
