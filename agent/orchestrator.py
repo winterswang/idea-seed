@@ -13,6 +13,7 @@ from agent.constants import (
     PHASE_REQUIREMENTS,
     PHASE_TECH_DESIGN,
     PHASE_EXECUTION_PLAN,
+    PHASE_PLANS,
     PHASE_DONE,
     MODE_LEGACY,
     MODE_PLAN,
@@ -181,7 +182,7 @@ class Orchestrator:
 
     def __init__(
         self,
-        seed: str,
+        seed: str | None = None,
         resume: bool = False,
         max_rounds: int | None = None,
         enable_token_tracking: bool = True,
@@ -191,7 +192,7 @@ class Orchestrator:
         Initialize orchestrator.
 
         Args:
-            seed: The original seed idea
+            seed: The original seed idea (can be None for resume)
             resume: Whether to resume from saved state
             max_rounds: Maximum rounds per phase (default: 10)
             enable_token_tracking: Whether to enable token tracking
@@ -201,7 +202,51 @@ class Orchestrator:
 
         self.mode = mode
         self.max_rounds = max_rounds if max_rounds is not None else MAX_ROUNDS
-        # Create project directory based on seed
+
+        # Initialize state directory first (needed for StateManager)
+        from agent.config import WORKDIR
+        self.state_dir = WORKDIR / "projects" / ".state"  # temp, will be updated
+
+        # Initialize state manager for enhanced persistence
+        self.state_manager = StateManager(self.state_dir)
+
+        # Resume or create new - load state first if resuming
+        state_file = WORKDIR / "projects" / ".state" / "session.json"
+        if resume:
+            # First try the default location
+            if not state_file.exists():
+                # Try to find any session.json in projects
+                for project_dir in (WORKDIR / "projects").iterdir():
+                    if project_dir.is_dir() and project_dir.name != ".state":
+                        candidate = project_dir / ".state" / "session.json"
+                        if candidate.exists():
+                            state_file = candidate
+                            break
+
+            if state_file.exists():
+                loaded = self.state_manager.load_state(state_file)
+                if loaded is not None:
+                    self.state = loaded
+                    # Use seed from loaded state
+                    seed = self.state.seed
+                    self.mode = self.state.mode  # Use mode from saved state
+                else:
+                    raise RuntimeError("Failed to resume: could not load state")
+            else:
+                raise RuntimeError("Failed to resume: no session state found")
+        elif not seed:
+            raise ValueError("seed is required for new sessions")
+
+        # For new sessions, create SessionState
+        if not resume:
+            self.state = SessionState(
+                session_id=str(uuid.uuid4()),
+                seed=seed,
+                phase=PHASE_REQUIREMENTS,
+                mode=self.mode,
+            )
+
+        # Now create project directory based on seed
         self.project_slug = slugify(seed)
         self.project_dir = WORKDIR / "projects" / self.project_slug
         self.project_dir.mkdir(parents=True, exist_ok=True)
@@ -210,55 +255,12 @@ class Orchestrator:
         self.log_path = self.project_dir / "execution.log"
         self.logger = Logger(self.log_path)
 
-        # Initialize directories
+        # Re-initialize state_dir to correct project location
         self.state_dir = self.project_dir / ".state"
         self.state_dir.mkdir(exist_ok=True)
 
-        # Initialize token tracker
-        self.token_tracker: TokenTracker | None = None
-        if enable_token_tracking:
-            self.token_tracker = TokenTracker(self.state_dir)
-
-        # Initialize state manager for enhanced persistence
+        # Re-initialize StateManager with correct state_dir
         self.state_manager = StateManager(self.state_dir)
-
-        # Initialize review analyzer (singleton)
-        self.review_analyzer = ReviewAnalyzer()
-
-        # Create rounds subdirectories for versioned artifacts
-        self.rounds_dir = self.project_dir / "rounds"
-        self.req_rounds_dir = self.rounds_dir / "requirements"
-        self.design_rounds_dir = self.rounds_dir / "designs"
-        self.review_rounds_dir = self.rounds_dir / "reviews"
-        self.req_rounds_dir.mkdir(parents=True, exist_ok=True)
-        self.design_rounds_dir.mkdir(parents=True, exist_ok=True)
-        self.review_rounds_dir.mkdir(parents=True, exist_ok=True)
-
-        # Resume or create new
-        state_file = self.state_dir / "session.json"
-        if resume and state_file.exists():
-            loaded = self.state_manager.load_state(state_file)
-            if loaded is not None:
-                self.state = loaded
-                self.logger.log(
-                    f"Resumed session: {self.state.session_id} (integrity verified)"
-                )
-            else:
-                # StateManager couldn't recover; fallback to basic load
-                self.state = load_state(state_file)
-                self.logger.log(
-                    f"Resumed session (basic load): {self.state.session_id}",
-                    "WARN",
-                )
-        else:
-            self.state = SessionState(
-                session_id=str(uuid.uuid4()),
-                seed=seed,
-                phase=PHASE_REQUIREMENTS,
-                mode=self.mode,
-            )
-            save_state(self.state, state_file)
-            self.logger.log(f"Started new session: {self.state.session_id}")
 
         self.logger.log("")
         self.logger.log(f"{'=' * 60}")
@@ -276,9 +278,41 @@ class Orchestrator:
         self.logger.log(f"{'=' * 60}")
         self.logger.log("")
 
-        # Set mode in state if resuming
-        if resume:
-            self.state.mode = self.mode
+        # Mode is restored from loaded state in load_state(), no need to overwrite
+        # Note: self.mode was already set from loaded state at line 231
+
+        # Initialize token tracker
+        self.token_tracker: TokenTracker | None = None
+        if enable_token_tracking:
+            self.token_tracker = TokenTracker(self.state_dir)
+
+        # Initialize review analyzer (singleton)
+        self.review_analyzer = ReviewAnalyzer()
+
+        # Create rounds subdirectories for versioned artifacts
+        self.rounds_dir = self.project_dir / "rounds"
+        self.req_rounds_dir = self.rounds_dir / "requirements"
+        self.design_rounds_dir = self.rounds_dir / "designs"
+        self.review_rounds_dir = self.rounds_dir / "reviews"
+        self.req_rounds_dir.mkdir(parents=True, exist_ok=True)
+        self.design_rounds_dir.mkdir(parents=True, exist_ok=True)
+        self.review_rounds_dir.mkdir(parents=True, exist_ok=True)
+
+        self.logger.log("")
+        self.logger.log(f"{'=' * 60}")
+        self.logger.log("  IDEA SEED - Iterative Document Builder")
+        self.logger.log(f"{'=' * 60}")
+        self.logger.log(f"  🌱 Seed: {self.state.seed}")
+        self.logger.log(f"  📁 Project: {self.project_dir}")
+        self.logger.log(f"  📋 Session: {self.state.session_id}")
+        self.logger.log(f"  📍 Phase: {self.state.phase.upper()}")
+        self.logger.log(f"  🔄 Max Rounds: {self.max_rounds}")
+        self.logger.log(f"  🎯 Mode: {self.mode.upper()}")
+        self.logger.log(
+            "  🎯 Convergence: 2 consecutive approvals or multi-dim scoring"
+        )
+        self.logger.log(f"{'=' * 60}")
+        self.logger.log("")
 
     @property
     def requirements_path(self) -> Path:
@@ -306,9 +340,11 @@ class Orchestrator:
                     self._run_requirements_phase()
                 elif self.state.phase == PHASE_TECH_DESIGN:
                     if self.mode == MODE_PLAN:
-                        self._run_execution_plan_phase()
+                        self._run_plans_phase()  # v2: Requirements → Plans
                     else:
                         self._run_design_phase()
+                elif self.state.phase == PHASE_PLANS:
+                    self._run_plans_phase()
                 elif self.state.phase == PHASE_EXECUTION_PLAN:
                     self._run_execution_plan_phase()
                 elif self.state.phase == PHASE_DONE:
@@ -347,7 +383,8 @@ class Orchestrator:
         if self.state.req_round > self.max_rounds:
             self.logger.log("Max rounds reached, forcing convergence", "WARN")
             self.state.req_converged = True
-            self.state.phase = PHASE_TECH_DESIGN
+            # v2 mode goes to Plans phase, legacy goes to Tech Design
+            self.state.phase = PHASE_PLANS if self.mode == MODE_PLAN else PHASE_TECH_DESIGN
             return
 
         # Get previous feedback
@@ -368,6 +405,12 @@ class Orchestrator:
 
         # Read back the file content that subagent wrote
         requirements = self._read_doc(round_req_path)
+
+        # Verify the file was written successfully
+        if not round_req_path.exists() or round_req_path.stat().st_size == 0:
+            raise RuntimeError(
+                f"Builder failed to write requirements to {round_req_path}"
+            )
         req_lines = requirements.count("\n")
         self.logger.log(
             f"      → Generated {req_lines} lines, {len(requirements)} chars in {build_time:.1f}s"
@@ -383,7 +426,10 @@ class Orchestrator:
         # Run Reviewer
         self.logger.log("")
         self.logger.log("  [2/2] Running Requirements Reviewer...")
+        self.logger.log(f"      → Reviewer input: requirements={len(requirements)} chars, seed={len(self.state.seed)} chars")
+        review_start = time.time()
         review_result = self._reviewer_req_review(requirements)
+        review_duration = time.time() - review_start
         self.state.req_review_history.append(review_result)
 
         approved = "✅ APPROVED" if review_result["approved"] else "❌ NEEDS WORK"
@@ -415,7 +461,8 @@ class Orchestrator:
             self.logger.log("")
             self.logger.log("  🎉 CONVERGENCE REACHED! Requirements are stable.")
             self.state.req_converged = True
-            self.state.phase = PHASE_TECH_DESIGN
+            # v2 mode goes to Plans phase, legacy goes to Tech Design
+            self.state.phase = PHASE_PLANS if self.mode == MODE_PLAN else PHASE_TECH_DESIGN
         else:
             self.logger.log("")
             self.logger.log(
@@ -540,6 +587,36 @@ class Orchestrator:
         last_two = self.state.design_review_history[-2:]
         return all(r.get("approved", False) for r in last_two)
 
+    def _run_plans_phase(self) -> None:
+        """Run the v2 Plans phase - split requirements into Plans and generate Tech-Specs.
+
+        Flow: Requirements → Plans → Tech-Spec for each Plan → DONE
+        """
+        self.logger.log("")
+        self.logger.log(f"{'=' * 60}")
+        self.logger.log("  PLANS PHASE - v2 Plan-based Workflow")
+        self.logger.log(f"{'=' * 60}")
+
+        # Import V2Workflow here to avoid circular import
+        from agent.v2_orchestrator import V2Workflow
+
+        try:
+            # Initialize V2 workflow helper
+            v2 = V2Workflow(self)
+
+            # Run the plans phase (Requirements → Plans → Tech-Spec)
+            v2.run_plans_phase()
+
+            # Plans phase complete - move to DONE
+            self.logger.log("")
+            self.logger.log("  🎉 All Plans processed!")
+            self.state.phase = PHASE_DONE
+
+        except Exception as e:
+            self.logger.log(f"  ⚠️ Plans phase error: {e}", "ERROR")
+            # Fallback: move to done
+            self.state.phase = PHASE_DONE
+
     def _check_execution_plan_convergence(self) -> bool:
         """Check if execution plan phase has converged."""
         if len(self.state.execution_plan_review_history) < 2:
@@ -630,7 +707,7 @@ class Orchestrator:
         )
 
         # Run subagent for review
-        run_subagent(
+        result_text, usage = run_subagent(
             prompt=review_prompt,
             system=REVIEWER_EXECUTION_PLAN_SYSTEM,
             token_tracker=self.token_tracker,
@@ -638,12 +715,21 @@ class Orchestrator:
             round_num=self.state.execution_plan_round,
         )
 
-        # Analyze review output using ReviewAnalyzer
-        # Note: In a full implementation, the review output would be captured and analyzed
-        # For now, we'll do a simple check
+        if usage:
+            self.logger.log(f"      → Reviewer usage: input={usage.get('input_tokens', 0)} output={usage.get('output_tokens', 0)}")
+        self.logger.log(f"      → Reviewer result: {len(result_text)} chars")
+
+        # Use ReviewAnalyzer for structured analysis
+        review_result_obj = self.review_analyzer.analyze(result_text)
+
         review_result = {
-            "approved": False,  # Default to not approved until we have proper analysis
-            "feedback": "Review analysis pending",
+            "approved": review_result_obj.approved,
+            "feedback": review_result_obj.raw_feedback
+            if not review_result_obj.approved
+            else None,
+            "scores": review_result_obj.scores,
+            "summary": review_result_obj.summary,
+            "round": self.state.execution_plan_round,
         }
 
         self.state.execution_plan_review_history.append(review_result)
@@ -750,7 +836,13 @@ class Orchestrator:
             requirements=requirements,
         )
 
-        result_text, _ = run_subagent(prompt=prompt, system=REVIEWER_REQ_SYSTEM)
+        self.logger.log(f"      → Reviewer prompt: {len(prompt)} chars (seed={len(self.state.seed)}, req={len(requirements)})")
+
+        result_text, usage = run_subagent(prompt=prompt, system=REVIEWER_REQ_SYSTEM)
+
+        if usage:
+            self.logger.log(f"      → Reviewer usage: input={usage.get('input_tokens', 0)} output={usage.get('output_tokens', 0)}")
+        self.logger.log(f"      → Reviewer result: {len(result_text)} chars")
 
         # Use ReviewAnalyzer for structured analysis
         review_result = self.review_analyzer.analyze(result_text)

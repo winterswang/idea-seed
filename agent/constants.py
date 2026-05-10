@@ -4,6 +4,7 @@
 PHASE_REQUIREMENTS = "requirements"
 PHASE_TECH_DESIGN = "tech_design"
 PHASE_EXECUTION_PLAN = "execution_plan"
+PHASE_PLANS = "plans"  # v2: Requirements → Plans → Tech-Spec
 PHASE_DONE = "done"
 
 # Execution mode
