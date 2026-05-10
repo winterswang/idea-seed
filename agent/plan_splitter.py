@@ -89,7 +89,7 @@ class PlanSplitter:
             is_header = stripped.startswith("#")
 
             # Section tracking: enter 功能需求, exit on next ## or # heading
-            if is_header and "功能需求" in stripped and "##" in stripped[:3]:
+            if is_header and "功能需求" in stripped and "非功能需求" not in stripped and "##" in stripped[:3]:
                 in_feature_section = True
             elif is_header and (stripped.startswith("## ") or stripped.startswith("# ")):
                 if "功能需求" not in stripped:
