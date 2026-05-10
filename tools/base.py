@@ -111,6 +111,7 @@ TOOL_HANDLERS = {
     "read_file": lambda **kw: run_read(kw["path"], kw.get("limit")),
     "write_file": lambda **kw: run_write(kw["path"], kw["content"]),
     "edit_file": lambda **kw: run_edit(kw["path"], kw["old_text"], kw["new_text"]),
+    "compact": lambda **kw: "Manual compact triggered - compression will happen if threshold exceeded",
 }
 
 
@@ -160,6 +161,19 @@ TOOL_SCHEMAS = [
                 "new_text": {"type": "string"},
             },
             "required": ["path", "old_text", "new_text"],
+        },
+    },
+    {
+        "name": "compact",
+        "description": "Trigger context compression to free up context. Use when the conversation becomes too long or you're repeating yourself.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "focus": {
+                    "type": "string",
+                    "description": "What to focus on preserving in the compressed context",
+                },
+            },
         },
     },
 ]
