@@ -826,7 +826,12 @@ class Orchestrator:
 
         self.logger.log(f"      → Reviewer prompt: {len(prompt)} chars (seed={len(self.state.seed)}, req={len(requirements)})")
 
-        result_text, usage = run_subagent(prompt=prompt, system=REVIEWER_REQ_SYSTEM)
+        try:
+            result_text, usage = run_subagent(prompt=prompt, system=REVIEWER_REQ_SYSTEM)
+        except RuntimeError as e:
+            self.logger.log(f"WARNING: Reviewer failed: {e}", "WARN")
+            result_text = "评审结果：需修改\n\n模型调用失败，请检查文档格式。"
+            usage = None
 
         if usage:
             self.logger.log(f"      → Reviewer usage: input={usage.get('input_tokens', 0)} output={usage.get('output_tokens', 0)}")
@@ -855,7 +860,11 @@ class Orchestrator:
             max_rounds=self.max_rounds,
         )
 
-        result_text, _ = run_subagent(prompt=prompt, system=REVIEWER_DESIGN_SYSTEM)
+        try:
+            result_text, _ = run_subagent(prompt=prompt, system=REVIEWER_DESIGN_SYSTEM)
+        except RuntimeError as e:
+            self.logger.log(f"WARNING: Design Reviewer failed: {e}", "WARN")
+            result_text = "评审结果：需修改\n\n模型调用失败，请检查技术方案。"
 
         # Use ReviewAnalyzer for structured analysis
         review_result = self.review_analyzer.analyze(result_text)
