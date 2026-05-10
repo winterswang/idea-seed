@@ -24,11 +24,9 @@ from agent.readme_generator import ReadmeGenerator
 from agent.review import ReviewAnalyzer
 from agent.plan_reviewer_prompts import PLAN_REVIEWER_SYSTEM, PLAN_REVIEWER_PROMPT
 
-
 class V2WorkflowError(Exception):
     """Error in v2 workflow."""
     pass
-
 
 class V2Workflow:
     """V2 specific workflow extensions for the Orchestrator.
@@ -153,30 +151,6 @@ class V2Workflow:
                 self.logger.log(f"      ❌ Plan review: NEEDS WORK")
                 previous_feedback = review.raw_feedback
 
-                # LLM re-split (max 2 attempts total)
-                if re_split_attempts < 2:
-                    try:
-                        re_split_prompt = self.plan_splitter.generate_split_prompt(
-                            requirements, existing_plans
-                        )
-                        re_split_prompt += f"\n\n## Previous Review Feedback\n{previous_feedback}\n\nPlease re-split addressing the feedback above."
-
-                        new_summary, _ = run_subagent(
-                            prompt=re_split_prompt,
-                            system="You are a Plan Split expert. Output a JSON array of plans.",
-                            max_tokens=4000,
-                            phase="plan-re-split",
-                            round_num=round_num,
-                        )
-                        # Parse new plans from LLM output
-                        new_splitted = self._parse_llm_plans(new_summary, existing_plans)
-                        re_split_attempts += 1
-                        if new_splitted:
-                            splitted = new_splitted
-                            self.logger.log(f"      → Re-split into {len(splitted)} plans")
-                    except Exception as e:
-                            self.logger.log(f"      ⚠️ Re-split failed: {e}, keeping original split")
-
         # Final validation warning
         if consecutive_approvals < 2:
             self.logger.log(f"    ⚠️ Plan review did not converge, proceeding with {len(splitted)} plans")
@@ -195,8 +169,6 @@ class V2Workflow:
             if sp.depends_on:
                 lines.append(f"  依赖: {', '.join(sp.depends_on)}")
         return "\n".join(lines)
-
-
 
     def _create_plans_from_splitted(
         self,
