@@ -32,7 +32,7 @@ def run_seed_mode_args() -> None:
     """Handle seed mode when first arg is the seed text itself."""
 
     parser = argparse.ArgumentParser(description="Idea Seed")
-    parser.add_argument("seed", help="Seed idea")
+    parser.add_argument("seed", nargs="?", help="Seed idea (required unless --resume)")
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--interactive", "-i", action="store_true")
     parser.add_argument("--provider", choices=["minimax", "aliyun", "bytedance"])

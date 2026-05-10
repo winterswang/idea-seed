@@ -241,10 +241,21 @@ def _heartbeat_log(logger: logging.Logger, start_time: float, phase: str, iterat
 
 
 def _extract_summary(content: Any) -> str:
-    """Extract summary text from final response."""
+    """Extract summary text from final response.
+
+    Handles text blocks, thinking blocks, and tool_use blocks.
+    """
     if isinstance(content, list):
-        texts = [b.text for b in content if hasattr(b, "text")]
-        return "".join(texts) or "(no summary)"
+        texts = []
+        for b in content:
+            if hasattr(b, "text") and b.text:
+                texts.append(b.text)
+            elif hasattr(b, "thinking") and b.thinking:
+                texts.append(b.thinking)
+            elif hasattr(b, "name"):
+                texts.append(f"[Tool: {b.name}]")
+        result = "".join(texts).strip()
+        return result if result else "(no summary)"
     return str(content)
 
 
