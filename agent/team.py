@@ -68,6 +68,7 @@ class MessageBus:
         return f"Broadcast to {count} teammates"
 
 
+from tools.base import TOOL_SCHEMAS as _TS
 class TeammateManager:
     """Manage persistent teammates with thread-based execution."""
 
@@ -202,10 +203,8 @@ class TeammateManager:
 
     def _teammate_tools(self) -> list:
         """Tools available to teammates."""
-        from tools.base import TOOL_SCHEMAS
-
         return [
-            *TOOL_SCHEMAS,
+            *_TS,
             {
                 "name": "send_message",
                 "description": "Send message to a teammate.",

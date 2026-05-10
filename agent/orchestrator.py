@@ -15,6 +15,7 @@ from agent.constants import (
     PHASE_TECH_DESIGN,
     PHASE_EXECUTION_PLAN,
     PHASE_PLANS,
+    MIN_SUBAGENT_CONTENT_LENGTH,
     PHASE_DONE,
     MODE_LEGACY,
     MODE_PLAN,
@@ -385,7 +386,7 @@ class Orchestrator:
         requirements = self._read_doc(round_req_path)
 
         # Verify the file was written successfully
-        if not round_req_path.exists() or round_req_path.stat().st_size == 0:
+        if not round_req_path.exists() or round_req_path.stat().st_size < MIN_SUBAGENT_CONTENT_LENGTH:
             raise RuntimeError(
                 f"Builder failed to write requirements to {round_req_path}"
             )
@@ -812,6 +813,8 @@ class Orchestrator:
         prompt = REVIEWER_REQ_PROMPT.format(
             seed=self.state.seed,
             requirements=requirements,
+            round_num=self.state.req_round,
+            max_rounds=self.max_rounds,
         )
 
         self.logger.log(f"      → Reviewer prompt: {len(prompt)} chars (seed={len(self.state.seed)}, req={len(requirements)})")
@@ -841,6 +844,8 @@ class Orchestrator:
             seed=self.state.seed,
             requirements=requirements,
             tech_design=tech_design,
+            round_num=self.state.design_round,
+            max_rounds=self.max_rounds,
         )
 
         result_text, _ = run_subagent(prompt=prompt, system=REVIEWER_DESIGN_SYSTEM)

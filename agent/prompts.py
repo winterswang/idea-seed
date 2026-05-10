@@ -143,6 +143,8 @@ REVIEWER_REQ_PROMPT = """
 ## Original Seed Idea (for alignment check)
 {seed}
 
+## Review Round: {round_num} / {max_rounds}
+
 ## Current Requirements Document
 {requirements}
 
@@ -217,6 +219,8 @@ REVIEWER_DESIGN_PROMPT = """
 
 ## Requirements Document (Reference)
 {requirements}
+
+## Review Round: {round_num} / {max_rounds}
 
 ## Current Technical Design Document
 {tech_design}

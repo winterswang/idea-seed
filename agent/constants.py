@@ -25,10 +25,6 @@ VERIFICATION_COVERAGE_CHECK = "coverage_check"
 VERIFICATION_MANUAL = "manual"
 VERIFICATION_PHASE_COMPLETION = "phase_completion"
 
-# Convergence
-CONVERGED = True
-NOT_CONVERGED = False
-
 # Message types
 MSG_TYPE_MESSAGE = "message"
 MSG_TYPE_BROADCAST = "broadcast"

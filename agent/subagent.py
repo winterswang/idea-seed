@@ -76,6 +76,7 @@ def run_subagent(
     for iteration in range(max_iterations):
         _logger.info(f"[SUBAGENT] Iteration {iteration + 1}/{max_iterations} | messages count: {len(sub_messages)}")
         retry_count = 0
+        short_content_streak = 0
 
         while retry_count < max_retries:
             try:
@@ -190,7 +191,8 @@ def run_subagent(
         content = _extract_summary(response.content)
         _logger.info(f"[SUBAGENT] Content extracted | length={len(content)} chars | min_required={MIN_CONTENT_LENGTH}")
 
-        if len(content) < MIN_CONTENT_LENGTH and iteration < max_iterations - 1:
+        short_content_streak += 1
+        if len(content) < MIN_CONTENT_LENGTH and iteration < max_iterations - 1 and short_content_streak < 3:
             # Content too short, retry with fresh context
             # Add a hint to the prompt about expected length
             hint = f"\n\n[Note: Previous response was too short ({len(content)} chars). Please generate a comprehensive document with substantial content (at least {MIN_CONTENT_LENGTH} chars).]"
