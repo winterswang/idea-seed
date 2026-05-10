@@ -13,6 +13,9 @@ from agent.constants import (
     MODE_PLAN,
 )
 
+# Current state schema version (increment when adding/removing fields)
+STATE_CURRENT_VERSION = 2
+
 
 @dataclass
 class SessionState:
@@ -67,7 +70,6 @@ class SessionState:
         if self.mode == MODE_LEGACY:
             return self.req_converged and self.design_converged
         else:
-            # Plan mode: execution plan must be converged
             return self.execution_plan_converged
 
     def is_plan_mode(self) -> bool:
@@ -76,56 +78,61 @@ class SessionState:
 
     def to_dict(self) -> dict:
         """Convert to dict for JSON serialization."""
-        return asdict(self)
+        d = asdict(self)
+        d["version"] = STATE_CURRENT_VERSION
+        return d
 
     @classmethod
     def from_dict(cls, data: dict) -> "SessionState":
         """Create from dict loaded from JSON."""
+        data = _migrate_state(data)
         return cls(**data)
 
 
+def _migrate_state(data: dict) -> dict:
+    """Migrate state data from older versions to current version.
+
+    Handles v0/v1 → v2: adds missing fields with defaults.
+    """
+    version = data.get("version", 0)
+    if version >= STATE_CURRENT_VERSION:
+        return data
+    defaults = {
+        "execution_plan_md5": "",
+        "execution_plan_round": 0,
+        "execution_plan_review_history": [],
+        "execution_plan_converged": False,
+        "tasks": [],
+        "checkpoints": [],
+        "current_task_index": 0,
+        "execution_summary": {},
+        "mode": "legacy",
+    }
+    for key, val in defaults.items():
+        data.setdefault(key, val)
+    data["version"] = STATE_CURRENT_VERSION
+    return data
+
+
 def save_state(state: SessionState, path: Path | None = None) -> str:
-    """
-    Save session state to JSON file.
-
-    Args:
-        state: SessionState to save
-        path: Optional path (defaults to .state/session.json)
-
-    Returns:
-        Success message with path
-    """
+    """Save session state to JSON file."""
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     if path is None:
         path = STATE_DIR / SESSION_STATE_FILE
-
     state.updated_at = datetime.now().isoformat()
-
     with open(path, "w") as f:
         json.dump(state.to_dict(), f, indent=2)
-
     return f"State saved to {path}"
 
 
 def load_state(path: Path | None = None) -> SessionState | None:
-    """
-    Load session state from JSON file.
-
-    Args:
-        path: Optional path (defaults to .state/session.json)
-
-    Returns:
-        SessionState if found, None otherwise
-    """
+    """Load session state from JSON file."""
     if path is None:
         path = STATE_DIR / SESSION_STATE_FILE
-
     if not path.exists():
         return None
-
     with open(path, "r") as f:
         data = json.load(f)
-
     return SessionState.from_dict(data)
 
 

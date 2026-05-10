@@ -59,6 +59,8 @@ def run_subagent(
     _logger.info(f"[SUBAGENT] Prompt length: {len(prompt)} chars, System length: {len(system)} chars")
 
     client = create_client()
+    subagent_start = time.time()
+    SUBAGENT_TOTAL_TIMEOUT = 3600  # 1 hour total timeout
     sub_messages = [{"role": "user", "content": prompt}]
     active_tools = tools if tools is not None else TOOL_SCHEMAS
 
@@ -74,11 +76,18 @@ def run_subagent(
     last_error: Optional[Exception] = None
 
     for iteration in range(max_iterations):
+        elapsed_total = time.time() - subagent_start
+        if elapsed_total > SUBAGENT_TOTAL_TIMEOUT:
+            _logger.warning(f"[SUBAGENT] Total timeout reached ({elapsed_total:.0f}s) — returning partial result")
+            return f"(timeout after {elapsed_total:.0f}s)", usage_info
+
         _logger.info(f"[SUBAGENT] Iteration {iteration + 1}/{max_iterations} | messages count: {len(sub_messages)}")
         retry_count = 0
         short_content_streak = 0
 
         while retry_count < max_retries:
+            if compact_enabled:
+                sub_messages = compact_if_needed(sub_messages, threshold=TOKEN_THRESHOLD)
             try:
                 _logger.info(f"[SUBAGENT] Calling API | model={MODEL_ID} | messages={len(sub_messages)} | tools={len(active_tools)} | timeout={API_TIMEOUT}s")
                 api_start = time.time()
@@ -136,6 +145,12 @@ def run_subagent(
                     after_compact = len(sub_messages)
                     if before_compact != after_compact:
                         _logger.info(f"[SUBAGENT] Micro compression | before={before_compact} after={after_compact}")
+
+                # Detect empty response (minimax bug: 0 tokens + stop_reason=None)
+                output_tokens = response.usage.output_tokens if hasattr(response, 'usage') and response.usage else 0
+                if response.stop_reason is None and output_tokens == 0:
+                    _logger.warning("[SUBAGENT] Empty response (0 output tokens) — retrying")
+                    raise RuntimeError("Empty response from API (0 output tokens)")
 
                 if response.stop_reason != "tool_use":
                     _logger.info(f"[SUBAGENT] Stop reason: {response.stop_reason} (not tool_use)")
@@ -200,13 +215,7 @@ def run_subagent(
             _logger.info(f"[SUBAGENT] Content too short, retrying with length hint")
             continue
 
-        # Layer 2: Check if compression is needed before returning
-        if compact_enabled:
-            before_compact = len(sub_messages)
-            sub_messages = compact_if_needed(sub_messages, threshold=TOKEN_THRESHOLD)
-            after_compact = len(sub_messages)
-            if before_compact != after_compact:
-                _logger.info(f"[SUBAGENT] Context compression | before={before_compact} after={after_compact}")
+        # Layer 2: compact_if_needed now runs inside the API loop before each call
 
         # Return summary and usage info - child context is discarded
         _logger.info(f"[SUBAGENT] Completed | content_length={len(content)} chars")
