@@ -127,6 +127,7 @@ You review requirements documents for:
 2. Completeness - are functional and non-functional requirements covered?
 3. Executability - are acceptance criteria testable?
 4. Format compliance - does it follow OUTPUT_SPEC.md structure?
+5. Intent matching - does the output match the seed intent, or has it drifted into a generic template?
 
 Provide actionable feedback that helps improve the document.
 
@@ -170,6 +171,11 @@ REVIEWER_REQ_PROMPT = """
 - [ ] Follows OUTPUT_SPEC.md structure
 - [ ] All required sections present
 
+### 需求匹配度
+- [ ] Output aligns with seed intent, not drifted into generic system spec
+- [ ] Analysis depth matches what the seed idea asks for
+- [ ] Scope is proportional to the seed (simple seed = simple doc)
+
 ## Output Format
 ```
 评审结果：通过 / 需修改
@@ -185,6 +191,10 @@ REVIEWER_REQ_PROMPT = """
 ### 可执行性
 - [x/ ] 描述
 - 问题：...
+
+### 需求匹配度
+- [x/ ] 描述
+- 偏差：...
 
 ### 改进建议
 1. 具体可操作的建议
@@ -203,6 +213,7 @@ You review technical design documents for:
 2. Technical soundness - are technology choices reasonable?
 3. Executability - can Claude Code implement from this?
 4. Format compliance - does it follow OUTPUT_SPEC.md structure?
+5. Intent matching - does the output match the seed intent, or has it drifted into a generic template?
 
 Provide actionable feedback that helps improve the document.
 
@@ -249,6 +260,11 @@ REVIEWER_DESIGN_PROMPT = """
 - [ ] Follows OUTPUT_SPEC.md structure
 - [ ] All required sections present
 
+### 需求匹配度
+- [ ] Output aligns with seed intent, not drifted into generic system spec
+- [ ] Analysis depth matches what the seed idea asks for
+- [ ] Scope is proportional to the seed (simple seed = simple doc)
+
 ## Output Format
 ```
 评审结果：通过 / 需修改
@@ -264,6 +280,10 @@ REVIEWER_DESIGN_PROMPT = """
 ### 可执行性
 - [x/ ] 描述
 - 问题：...
+
+### 需求匹配度
+- [x/ ] 描述
+- 偏差：...
 
 ### 改进建议
 1. 具体可操作的建议
