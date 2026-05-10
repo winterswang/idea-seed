@@ -14,12 +14,12 @@ from agent.plan import Plan, Priority
 @dataclass
 class SplittedPlan:
     """Result of splitting requirements into a plan."""
-    feature: str  # Brief feature name
-    description: str  # What this plan covers
+    feature: str
+    description: str
     priority: Priority
-    depends_on: list[str]  # Plan IDs this depends on
-    acceptance_criteria: list[str]  # Extracted from requirements
-    tasks: list[str]  # Task list for this plan
+    depends_on: list[str]
+    acceptance_criteria: list[str]
+    tasks: list[str]
 
 
 class PlanSplitterError(Exception):
@@ -30,126 +30,90 @@ class PlanSplitterError(Exception):
 class PlanSplitter:
     """Splits requirements document into Plans based on functional modules.
 
-    Usage:
-        splitter = PlanSplitter()
-        plans = splitter.split(requirements_text, existing_plans=None)
+    Extracts individual features (#### F1: Name) under 功能需求 section.
+    Falls back to ### numbered headings if no F-pattern features exist.
     """
 
     def __init__(self) -> None:
-        """Initialize plan splitter."""
         pass
 
     def split(self, requirements: str, existing_plans: Optional[list[Plan]] = None) -> list[SplittedPlan]:
-        """Split requirements into Plans.
-
-        Args:
-            requirements: Requirements document text
-            existing_plans: Optional existing plans for incremental mode
-
-        Returns:
-            List of SplittedPlan objects ready for Plan creation
-
-        Raises:
-            PlanSplitterError: If requirements cannot be parsed
-        """
         if existing_plans is None:
             existing_plans = []
-
-        # Extract features from requirements
         features = self._extract_features(requirements)
-
         if not features:
             raise PlanSplitterError("No features found in requirements document")
-
-        # Group related requirements into plans
-        plans = self._create_plans(features, existing_plans)
-
-        return plans
+        return self._create_plans(features, existing_plans)
 
     def _extract_features(self, requirements: str) -> list[dict]:
-        """Extract features from requirements document.
+        """Extract F-pattern features (#### F1: Name) under 功能需求.
 
-        Args:
-            requirements: Raw requirements text
-
-        Returns:
-            List of feature dicts with name, description, priority, criteria
+        Falls back to ### numbered headings if no F-pattern found.
         """
-        features = []
+        features: list[dict] = []
 
-        # Skip these sections (not features)
-        skip_sections = {
-            "项目概述", "数据需求", "非功能需求",
-            "Out of Scope", "任务清单", "目录",
-            "项目简介", "背景", "目标", "成功标准", "目标用户",
-            "功能描述", "功能详细说明",
-            "详细说明", "接口设计", "数据模型", "需求文档"
-        }
-        # Skip headers containing these
-        skip_containing = {"功能需求", "数据需求", "非功能需求", "成功标准"}
-
-        # Feature patterns (in priority order):
-        # 1. ### Feature: Name or #### Feature: Name (explicit)
-        # 2. #### 2.1.1 Name (numbered subsection = feature under 功能需求)
-        feature_pattern = re.compile(
-            r"^(#{3,4})\s*"                           # 3 or 4 #s
-            r"(?:(?:Feature|feature|功能点)[:：]?\s*)?" # optional keyword
-            r"[\d\.：:、]+\s*"                        # number like 2.1.1 or 1
-            r"(.+)$"                                  # feature name
+        # Primary pattern: #### F1: Feature Name inside 功能需求
+        f_pattern = re.compile(
+            r"^####\s+"
+            r"F\d+\s*[:：]\s*"
+            r"(.+)$"
         )
 
+        # Fallback pattern: ### N.XX Name inside 功能需求
+        fallback_pattern = re.compile(
+            r"^###\s+"
+            r"[\d\.]+\s+"
+            r"(.+)$"
+        )
+
+        skip_sections = {
+            "项目概述", "数据需求", "非功能需求", "Out of Scope",
+            "任务清单", "目录", "附录", "核心功能", "用户界面功能",
+        }
+
         current_feature = None
-        current_criteria = []
-        current_tasks = []
+        current_criteria: list[str] = []
+        current_tasks: list[str] = []
         in_task_section = False
-        in_feature_section = False  # True when inside 功能需求 section
+        in_feature_section = False
+        pattern = f_pattern  # default
+        has_f_features = self._has_f_pattern(requirements)
+
+        if has_f_features:
+            pattern = f_pattern
+        else:
+            pattern = fallback_pattern
 
         for line in requirements.split("\n"):
-            line = line.rstrip()
-
-            # Check if this is a header line
             stripped = line.strip()
             is_header = stripped.startswith("#")
 
-            # Track which section we're in
-            if is_header and "功能需求" in stripped:
+            # Section tracking: enter 功能需求, exit on next ## or # heading
+            if is_header and "功能需求" in stripped and "##" in stripped[:3]:
                 in_feature_section = True
-            elif is_header and (stripped.startswith("# 1") or stripped.startswith("# 2") or "概述" in stripped):
-                in_feature_section = False
+            elif is_header and (stripped.startswith("## ") or stripped.startswith("# ")):
+                if "功能需求" not in stripped:
+                    in_feature_section = False
 
-            # Check for task section
-            if is_header:
-                for skip in skip_containing:
-                    if skip in stripped:
-                        in_task_section = "任务清单" in stripped or "Task" in stripped
-                        break
-
-                for skip in skip_sections:
-                    if stripped == f"# {skip}" or stripped == f"## {skip}" or stripped == f"### {skip}":
-                        in_task_section = "任务清单" in stripped or "Task" in stripped
-                        break
+            # Detect task section
+            if is_header and ("任务清单" in stripped or "Task" in stripped):
+                in_task_section = True
+            elif is_header and stripped.startswith("## "):
+                in_task_section = False
 
             # Match feature header
-            match = feature_pattern.match(stripped)
+            match = pattern.match(stripped)
             if match and in_feature_section:
-                level = match.group(1)  # ### or ####
-                feature_name = match.group(2).strip()
+                feature_name = match.group(1).strip()
+                feature_name = re.sub(r'[\s:：、]+$', '', feature_name)
 
-                # Skip if name is in skip_sections
-                if feature_name in skip_sections:
-                    continue
-
-                # Remove any trailing :：from name
-                feature_name = re.sub(r'[\s:：:、]+$', '', feature_name)
-
-                if feature_name:
+                if feature_name and feature_name not in skip_sections:
                     # Save previous feature
                     if current_feature:
                         current_feature["acceptance_criteria"] = current_criteria
                         current_feature["tasks"] = current_tasks
                         features.append(current_feature)
 
-                    # Start new feature
                     current_feature = {
                         "name": feature_name,
                         "description": "",
@@ -162,33 +126,29 @@ class PlanSplitter:
                     in_task_section = False
                 continue
 
-            # Look for priority indicators
             if current_feature:
-                # Priority: P0 or 优先级：P0
+                # Priority detection
                 if re.search(r"优先级\s*[:：]\s*P0", line, re.IGNORECASE):
                     current_feature["priority"] = Priority.P0
-                elif re.search(r"优先级\s*[:：]\s*P1", line, re.IGNORECASE):
-                    current_feature["priority"] = Priority.P1
                 elif re.search(r"优先级\s*[:：]\s*P2", line, re.IGNORECASE):
                     current_feature["priority"] = Priority.P2
 
-                # Look for acceptance criteria checkboxes
+                # Acceptance criteria checkboxes
                 if re.search(r"^\s*[-*]\s*\[\s*[x ]?\]", line, re.IGNORECASE):
-                    match = re.search(r"\[\s*[x ]?\]\s*(.+)", line, re.IGNORECASE)
-                    if match:
-                        current_criteria.append(match.group(1).strip())
+                    m = re.search(r"\[\s*[x ]?\]\s*(.+)", line, re.IGNORECASE)
+                    if m:
+                        current_criteria.append(m.group(1).strip())
 
-                # Look for task items (in task list section)
+                # Task items
                 if in_task_section:
                     task_match = re.match(r"^\s*(?:\d+\.|[-*])\s*(.+)", line)
                     if task_match and line.strip():
                         current_tasks.append(task_match.group(1).strip())
 
-                # Accumulate description (non-header, non-criteria lines)
+                # Accumulate description
                 if line and not line.startswith("#") and "[" not in line:
                     current_feature["description"] += " " + line
 
-        # Save last feature
         if current_feature:
             current_feature["acceptance_criteria"] = current_criteria
             current_feature["tasks"] = current_tasks
@@ -196,90 +156,41 @@ class PlanSplitter:
 
         return features
 
+    def _has_f_pattern(self, requirements: str) -> bool:
+        """Check if requirements doc uses F1:, F2: feature naming."""
+        return bool(re.search(r"^####\s+F\d+\s*[:：]", requirements, re.MULTILINE))
+
     def _create_plans(self, features: list[dict], existing_plans: list[Plan]) -> list[SplittedPlan]:
-        """Create Plans from extracted features with dependency analysis.
-
-        Args:
-            features: Extracted features
-            existing_plans: Existing plans for dependency check
-
-        Returns:
-            List of SplittedPlan objects
-        """
-        plans = []
-        feature_to_plan_id = {}
-
-        for i, feat in enumerate(features):
-            plan_id = f"plan-{i+1:03d}"
-
-            # Analyze dependencies on previous plans
+        plans: list[SplittedPlan] = []
+        for feat in features:
             depends_on = self._analyze_dependencies(feat, plans, existing_plans)
-
-            # Create splitted plan
-            sp = SplittedPlan(
+            plans.append(SplittedPlan(
                 feature=feat["name"],
                 description=feat["description"].strip(),
                 priority=feat["priority"],
                 depends_on=depends_on,
                 acceptance_criteria=feat["acceptance_criteria"],
                 tasks=feat["tasks"],
-            )
-            plans.append(sp)
-            feature_to_plan_id[feat["name"]] = plan_id
-
+            ))
         return plans
 
     def _analyze_dependencies(
-        self,
-        feature: dict,
-        previous_plans: list[SplittedPlan],
+        self, feature: dict, previous_plans: list[SplittedPlan],
         existing_plans: list[Plan]
     ) -> list[str]:
-        """Analyze which plans this feature depends on.
-
-        Args:
-            feature: Current feature dict
-            previous_plans: Plans created so far
-            existing_plans: Existing plans from file
-
-        Returns:
-            List of plan IDs this feature depends on
-        """
-        deps = []
-
-        # Check against previous plans in this batch
+        deps: list[str] = []
         feature_lower = feature["name"].lower()
-        for prev_plan in previous_plans:
-            prev_lower = prev_plan.feature.lower()
-            # Simple keyword matching
-            shared = set(feature_lower.split()) & set(prev_lower.split())
+        for i, pp in enumerate(previous_plans):
+            shared = set(feature_lower.split()) & set(pp.feature.lower().split())
             if len(shared) >= 2:
-                # Likely related - mark as dependency
-                plan_id = f"plan-{previous_plans.index(prev_plan)+1:03d}"
-                deps.append(plan_id)
-
-        # Check against existing plans
-        for existing in existing_plans:
-            existing_lower = existing.feature.lower()
-            shared = set(feature_lower.split()) & set(existing_lower.split())
+                deps.append(f"plan-{i+1:03d}")
+        for ep in existing_plans:
+            shared = set(feature_lower.split()) & set(ep.feature.lower().split())
             if len(shared) >= 2 and len(shared) / len(set(feature_lower.split())) > 0.4:
-                deps.append(existing.plan_id)
-
-        return list(set(deps))  # Deduplicate
+                deps.append(ep.plan_id)
+        return list(set(deps))
 
     def generate_split_prompt(self, requirements: str, existing_plans: Optional[list[Plan]] = None) -> str:
-        """Generate the prompt for AI-based splitting.
-
-        This is used when simple regex extraction is insufficient and
-        we need AI to properly analyze and split requirements.
-
-        Args:
-            requirements: Requirements document text
-            existing_plans: Optional existing plans
-
-        Returns:
-            Formatted prompt string for AI splitting
-        """
         existing_info = ""
         if existing_plans:
             existing_info = "## Existing Plans (do not duplicate)\n"
