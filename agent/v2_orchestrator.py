@@ -120,6 +120,7 @@ class V2Workflow:
 
         consecutive_approvals = 0
         previous_feedback = None
+        re_split_attempts = 0
 
         for round_num in range(1, max_rounds + 1):
             # Build plans summary for reviewer
@@ -154,27 +155,29 @@ class V2Workflow:
                 self.logger.log(f"      ❌ Plan review: NEEDS WORK")
                 previous_feedback = review.raw_feedback
 
-                # Attempt LLM-based re-split with feedback
-                try:
-                    re_split_prompt = self.plan_splitter.generate_split_prompt(
-                        requirements, existing_plans
-                    )
-                    re_split_prompt += f"\n\n## Previous Review Feedback\n{previous_feedback}\n\nPlease re-split addressing the feedback above."
+                # LLM re-split (max 2 attempts total)
+                if re_split_attempts < 2:
+                    try:
+                        re_split_prompt = self.plan_splitter.generate_split_prompt(
+                            requirements, existing_plans
+                        )
+                        re_split_prompt += f"\n\n## Previous Review Feedback\n{previous_feedback}\n\nPlease re-split addressing the feedback above."
 
-                    new_summary, _ = run_subagent(
-                        prompt=re_split_prompt,
-                        system="You are a Plan Split expert. Output a JSON array of plans.",
-                        max_tokens=4000,
-                        phase="plan-re-split",
-                        round_num=round_num,
-                    )
-                    # Parse new plans from LLM output
-                    new_splitted = self._parse_llm_plans(new_summary, existing_plans)
-                    if new_splitted:
-                        splitted = new_splitted
-                        self.logger.log(f"      → Re-split into {len(splitted)} plans")
-                except Exception as e:
-                    self.logger.log(f"      ⚠️ Re-split failed: {e}, keeping original split")
+                        new_summary, _ = run_subagent(
+                            prompt=re_split_prompt,
+                            system="You are a Plan Split expert. Output a JSON array of plans.",
+                            max_tokens=4000,
+                            phase="plan-re-split",
+                            round_num=round_num,
+                        )
+                        # Parse new plans from LLM output
+                        new_splitted = self._parse_llm_plans(new_summary, existing_plans)
+                        re_split_attempts += 1
+                        if new_splitted:
+                            splitted = new_splitted
+                            self.logger.log(f"      → Re-split into {len(splitted)} plans")
+                    except Exception as e:
+                            self.logger.log(f"      ⚠️ Re-split failed: {e}, keeping original split")
 
         # Final validation warning
         if consecutive_approvals < 2:
