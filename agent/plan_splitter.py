@@ -54,7 +54,7 @@ class PlanSplitter:
 
         # Primary pattern: #### F1: Feature Name inside 功能需求
         f_pattern = re.compile(
-            r"^####\s+"
+            r"^#{3,4}\s+"
             r"F\d+\s*[:：]\s*"
             r"(.+)$"
         )
