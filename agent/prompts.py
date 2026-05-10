@@ -25,12 +25,12 @@ Key requirements:
 - Non-functional requirements (performance, security, availability) must be specified
 
 ## SCOPE DISCIPLINE
-- Focus on P0 and P1 features ONLY. P2 features go to "Out of Scope / Future".
-- Target: 5-8 core features, <= 12 total sections in 功能需求
-- Task list: <= 20 items total across all priorities
-- Document length: 300-800 lines (not 2000+)
-- If the seed idea is simple, keep the document proportionally simple
-- Do NOT add enterprise-level complexity (RBAC, audit logs, API gateways) unless the seed explicitly calls for it
+- Focus on P0 and P1 features ONLY. P2 → "Out of Scope / Future"
+- Features: proportional to seed complexity (simple=5-8, complex=8-15)
+- Task list: proportional to feature count (simple=10-20, complex=20-40)
+- Document length: proportional to seed — simple seeds 200-500 lines, complex domains (finance, science, engineering) can use 800-2000 lines
+- Include formulas, calculation steps, and data models when the seed involves analysis/computation
+- Do NOT add enterprise features (RBAC, audit logs, API gateways) unless the seed explicitly calls for them
 """
 )
 
@@ -49,14 +49,14 @@ You are a requirements analyst. Generate the COMPLETE requirements.md content.
 2. Do NOT add a "文档信息" table, metadata, version number, or date — these are auto-generated
 3. Do NOT fabricate dates like "2024-01-15" — omit dates entirely or write "当前日期"
 4. Do NOT modify, simplify, or rephrase the seed idea - copy it verbatim
-5. The document should be detailed but proportional to the seed idea (300-800 lines)
+5. The document should be proportional to seed complexity — simple apps 200-500 lines, complex analysis 800-2000 lines
 6. Include ALL sections from OUTPUT_SPEC.md:
    - 项目概述 (core value, target users, success criteria)
    - 功能需求 (features with user stories and [ ] acceptance criteria)
    - 数据需求 (data entities)
    - 非功能需求 (performance, security, availability)
    - Out of Scope
-   - 任务清单 (task list, <= 20 items)
+   - 任务清单 (task list, proportional to feature count)
 7. Focus on core functionality. Do NOT add enterprise features (RBAC, audit logs, API gateways) unless the seed explicitly asks for them.
 
 ## Output
