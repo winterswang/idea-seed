@@ -1,8 +1,8 @@
 # Idea Seed
 
-**Iterative Document Builder** - 基于 AI 多智能体协作的迭代式文档生成系统
+**Iterative Project Builder** - 基于 AI 多智能体协作的迭代式文档生成与项目管理系统
 
-将一个简单的想法（种子）通过 Builder 和 Reviewer 两个角色的协作，迭代完善为完整的需求文档和可执行的行动计划。
+将一个简单的想法（种子）通过 Builder 和 Reviewer 两个角色的协作，迭代完善为完整的需求文档和可执行的行动计划。支持独立的 Plan 管理、增量更新和上下文压缩。
 
 ---
 
@@ -15,37 +15,49 @@
 
 ### 双模式执行
 - **Legacy 模式**：生成传统技术方案文档（tech-design.md）
-- **Plan 模式**：生成可执行的行动计划（execution-plan.md）
+- **Plan 模式（V2）**：生成可执行的 Plan 列表和 Tech-Spec
+
+### Plan 级迭代
+- **独立迭代**：每个 Plan 有自己的 Tech-Spec 生成循环
+- **依赖管理**：自动分析 Plan 间依赖关系，支持并行
+- **状态跟踪**：stage × status 二维状态机
 
 ### 稳定性保障
 - **写入验证**：Builder 写入后自动验证，防止空内容传播
 - **状态持久化**：增强版 StateManager，支持版本、备份、校验、锁
 - **断点恢复**：中断后可无缝继续
+- **上下文压缩**：三层压缩机制防止上下文无限累积
 
 ---
 
 ## 工作流程
 
+### Legacy 模式（传统技术方案）
+
 ```
 种子想法
     ↓
-┌─────────────────────────────────────────────────────────────┐
-│                 REQUIREMENTS PHASE                          │
-│  Round N:                                                    │
-│    1. Builder → 生成需求文档（直接写入文件）                   │
-│    2. Reviewer → 多维度评审，给出改进建议                     │
-│    3. 收敛条件：连续 2 轮评审通过                             │
-└─────────────────────────────────────────────────────────────┘
-                            ↓ 收敛
-┌─────────────────────────────────────────────────────────────┐
-│              EXECUTION PLAN PHASE (Plan Mode)                │
-│  Round N:                                                    │
-│    1. Builder → 生成执行计划（Phase/Task/Checkpoint）       │
-│    2. Reviewer → 评审可执行性和验证覆盖率                      │
-│    3. 收敛条件：连续 2 轮评审通过                             │
-└─────────────────────────────────────────────────────────────┘
-                            ↓ 收敛
-                          完成
+Requirements Phase（需求文档迭代，2轮收敛）
+    ↓
+Tech Design Phase（技术方案迭代，2轮收敛）
+    ↓
+完成
+```
+
+### Plan 模式（V2 - 迭代式项目管理）
+
+```
+种子想法
+    ↓
+Requirements Phase（需求文档迭代，2轮收敛）
+    ↓
+Plans Phase（需求 → Plans 拆分）
+    ↓
+Tech-Spec Phase（每个 Plan 独立迭代生成 Tech-Spec）
+    ↓
+README 自动生成（Plan 清单 + 状态）
+    ↓
+完成
 ```
 
 ---
@@ -75,10 +87,10 @@ MINIMAX_MODEL=minimax2.7
 ### 3. 运行
 
 ```bash
-# 基本用法
+# 基本用法（Legacy 模式）
 PYTHONPATH=$(pwd) python -m agent.main "你的种子想法"
 
-# Plan 模式（生成执行计划）
+# Plan 模式（生成可执行 Plans）
 PYTHONPATH=$(pwd) python -m agent.main "你的种子想法" --mode plan
 
 # 恢复中断的会话
@@ -92,38 +104,24 @@ PYTHONPATH=$(pwd) python -m agent.main "你的种子想法" --max-rounds 20
 
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
-| `seed` | 种子想法 | 必填 |
+| `seed` | 种子想法 | 必填（新建） |
 | `--mode` | 执行模式：`legacy` 或 `plan` | legacy |
 | `--resume` | 恢复中断的会话 | False |
 | `--max-rounds` | 每阶段最大迭代轮数 | 10 |
 | `--provider` | AI 服务商 | minimax |
 
----
+### 5. 子命令
 
-## 执行模式详解
+```bash
+# 查看项目所有 Plans
+python -m agent.main plans my-project
 
-### Legacy 模式（默认）
+# 查看/更新 Plan 状态
+python -m agent.main review plan-001 --stage test --status in_progress
 
-生成技术方案文档，流程：
-1. Requirements Phase（需求文档迭代）
-2. Tech Design Phase（技术方案迭代）
-
-### Plan 模式（V2）
-
-生成可执行的行动计划，流程：
-1. Requirements Phase（需求文档迭代）
-2. Execution Plan Phase（执行计划迭代）
-
-**执行计划特性**：
-- **Phase（阶段）**：逻辑任务分组，每阶段有 Checkpoint 验证
-- **Task（任务）**：可执行的最小单元，包含：
-  - 描述（具体可执行）
-  - 优先级（P0/P1/P2）
-  - 验证类型（command_execution/file_existence/coverage_check/manual）
-  - 验证配置（验证命令或文件路径）
-  - 依赖关系
-  - 预估时长
-- **Checkpoint（检查点）**：验证阶段内所有任务完成情况
+# 追加新功能到现有项目
+python -m agent.main append "新功能描述" --project my-project
+```
 
 ---
 
@@ -131,25 +129,31 @@ PYTHONPATH=$(pwd) python -m agent.main "你的种子想法" --max-rounds 20
 
 ```
 idea-seed/
-├── agent/                    # 核心智能体模块
-│   ├── config.py            # 配置管理（.env 加载）
-│   ├── constants.py         # 常量定义
-│   ├── orchestrator.py      # 业务编排器（主循环）
-│   ├── prompts.py           # Prompt 模板（Builder/Reviewer）
-│   ├── state.py             # 会话状态定义
-│   ├── state_manager.py      # 增强状态管理（版本/备份/校验/锁）
-│   ├── review.py             # 多维度评审分析器（ReviewAnalyzer）
-│   ├── token_tracker.py     # Token 用量追踪
-│   ├── subagent.py          # 子智能体运行器
-│   ├── compact.py           # 上下文压缩
-│   ├── team.py              # 团队管理
-│   └── main.py              # CLI 入口
-├── tools/                   # 工具集
-│   └── base.py              # 基础工具（bash/read/write/edit）
-├── tests/                   # 测试
-├── projects/                # 生成的项目目录
-├── OUTPUT_SPEC.md           # 文档格式规范
-├── DESIGN.md                # 设计文档
+├── agent/                        # 核心智能体模块
+│   ├── plan.py                   # Plan 数据结构
+│   ├── plan_manager.py           # PlanManager (CRUD + 循环检测)
+│   ├── plan_splitter.py          # Requirements → Plans 拆分
+│   ├── plan_compact.py          # Plan 级上下文压缩
+│   ├── tech_spec_generator.py   # Per-Plan Tech-Spec 生成
+│   ├── readme_generator.py      # README 自动生成
+│   ├── v2_orchestrator.py        # V2 工作流扩展
+│   ├── orchestrator.py          # 主业务编排器
+│   ├── subagent.py               # 子智能体运行器
+│   ├── compact.py                # 三层上下文压缩
+│   ├── state_manager.py          # 状态管理（版本/备份/校验/锁）
+│   ├── review.py                 # 多维度评审分析器
+│   ├── token_tracker.py         # Token 用量追踪
+│   └── main.py                   # CLI 入口
+├── tools/
+│   └── base.py                   # 基础工具（bash/read/write/edit/compact）
+├── execution_plan/               # Execution Plan 模块
+│   ├── models.py                 # Task/Checkpoint/Phase 模型
+│   ├── generator.py              # 执行计划生成器
+│   ├── verifier.py               # 验证引擎
+│   └── progress.py              # 进度管理器
+├── tests/                        # 测试
+├── projects/                     # 生成的项目目录
+├── OUTPUT_SPEC.md               # 文档格式规范
 └── README.md
 ```
 
@@ -160,9 +164,11 @@ idea-seed/
 ### 1. 多智能体协作
 
 ```
-Orchestrator
+Orchestrator (主编排器)
+    │
     ├── Builder（生成内容）
     │   └── 通过 write_file 直接写入完整内容到文件
+    │
     └── Reviewer（评审反馈）
         └── 通过 ReviewAnalyzer 进行多维度结构化分析
 ```
@@ -172,9 +178,33 @@ Orchestrator
 2. 完整内容不会因返回截断丢失
 3. 文档直接落盘，更可靠
 
-### 2. 多维度评审（ReviewAnalyzer）
+### 2. V2 Plan 管理架构
 
-Reviewer 输出通过 `ReviewAnalyzer` 进行结构化分析：
+```
+Requirements Document
+        ↓
+   PlanSplitter
+        ↓
+┌───────────────────────────────────────┐
+│           plans.json                  │
+│  ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐     │
+│  │ P1  │→│ P2  │→│ P3  │→│ P4  │     │
+│  └──┬──┘ └──┬──┘ └─────┘ └─────┘     │
+│     ↓       ↓                         │
+│  Tech-Spec Tech-Spec                 │
+│  (独立迭代) (独立迭代)                │
+└───────────────────────────────────────┘
+        ↓
+   README.md (自动更新)
+```
+
+**Plan 状态机**：
+```
+stage: dev → test → release → (blocked)
+status: pending → in_progress → done → (blocked)
+```
+
+### 3. 多维度评审（ReviewAnalyzer）
 
 | 维度 | 说明 |
 |------|------|
@@ -187,9 +217,15 @@ Reviewer 输出通过 `ReviewAnalyzer` 进行结构化分析：
 1. 否定模式（需修改/不通过）> 通过模式（通过/approved）
 2. 默认拒绝未明确通过的文档
 
-### 3. 状态管理（StateManager）
+### 4. 三层上下文压缩
 
-增强的状态持久化机制：
+| Layer | Function | Trigger | 效果 |
+|-------|----------|---------|------|
+| 1 | `micro_compact()` | 每轮后 | 旧 tool_result → 占位符 |
+| 2 | `compact_if_needed()` | TOKEN_THRESHOLD 超限 | 保存 transcript，压缩上下文 |
+| 3 | `compact_tool()` | LLM 显式调用 | 手动触发压缩 |
+
+### 5. 状态管理（StateManager）
 
 | 特性 | 说明 |
 |------|------|
@@ -200,15 +236,13 @@ Reviewer 输出通过 `ReviewAnalyzer` 进行结构化分析：
 | 自动恢复 | 校验失败时自动从备份/版本中恢复 |
 | 原子写入 | 先写临时文件再 rename，避免写入中断 |
 
-### 4. 安全机制
+### 6. 安全机制
 
 - **路径验证**：所有文件操作经过路径验证，确保文件只能在项目目录内
 - **禁止裸文件名**：必须使用子目录路径（如 `projects/my-project/requirements.md`）
 - **路径穿越防护**：`../../../etc/passwd` 等非法路径被拦截
 
-### 5. 多 Provider 支持
-
-支持切换不同的 AI 服务商：
+### 7. 多 Provider 支持
 
 | Provider | 模型 | 默认模型 |
 |----------|------|----------|
@@ -227,50 +261,38 @@ Reviewer 输出通过 `ReviewAnalyzer` 进行结构化分析：
 ```
 projects/
 └── {project-slug}/
-    ├── README.md              # 项目概览（自动生成）
-    ├── requirements.md        # 需求文档（最新版本）
-    ├── execution-plan.md     # 执行计划（Plan 模式）
-    ├── tech-design.md         # 技术方案（Legacy 模式）
-    ├── execution.log          # 执行日志
-    ├── .state/                # 状态持久化目录
-    │   ├── session.json       # 当前状态（symlink → session.vN.json）
-    │   ├── versions/          # 版本历史
-    │   │   └── session.v*.json
-    │   ├── backups/           # 自动备份
-    │   └── token_records.json # Token 用量记录
-    └── rounds/                # 每轮迭代的版本记录
+    ├── README.md              # 项目概览（V2 自动生成，包含 Plan 清单）
+    ├── requirements.md       # 需求文档（最新版本）
+    ├── tech-design.md        # 技术方案（Legacy 模式）
+    ├── execution-plan.md     # 执行计划（Legacy Plan 模式）
+    ├── plans/                # V2 Plan 目录
+    │   ├── plan-001/
+    │   │   └── plan-001-tech-spec.md  # Plan Tech-Spec
+    │   └── plan-002/
+    │       └── plan-002-tech-spec.md
+    ├── .state/               # 状态持久化目录
+    │   ├── session.json     # 当前状态
+    │   ├── plans.json       # Plan 状态追踪（V2）
+    │   ├── versions/        # 版本历史
+    │   ├── backups/         # 自动备份
+    │   └── token_records.json
+    └── rounds/              # 每轮迭代的版本记录
         ├── requirements/
         ├── designs/
         └── reviews/
 ```
 
-### Plan 模式输出示例（execution-plan.md）
+### Plan 模式输出（V2）
 
-```markdown
-# 执行计划
-
-## 1. 概述
-[高-level 总结]
-
-## 2. 阶段划分
-### Phase 1: [名称]
-[描述]
-Tasks: task-1-1, task-1-2
-Checkpoint: cp-1
-
-## 3. 任务详情
-### Task task-1-1: [名称]
-- **描述**: [详细描述]
-- **优先级**: P0
-- **验证类型**: command_execution
-- **验证配置**: [验证命令]
-- **依赖**: none
-- **预估时长**: 4h
-
-## 4. 检查点
-### Checkpoint cp-1: [名称]
-- **验证任务**: task-1-1, task-1-2
-- **验证方式**: [如何验证]
+```
+projects/my-project/
+├── README.md                    # Plan 清单表格 + 状态徽章
+├── requirements.md             # 需求文档
+└── plans/
+    ├── plan-001/
+    │   └── plan-001-tech-spec.md  # 详细实现方案
+    └── plan-002/
+        └── plan-002-tech-spec.md
 ```
 
 ---
@@ -283,26 +305,6 @@ Checkpoint: cp-1
 | `MAX_ROUNDS` | 10 | 每阶段最大迭代轮数 |
 | `TOKEN_THRESHOLD` | 150000 | 上下文压缩阈值 |
 | `KEEP_RECENT` | 3 | 压缩时保留的最近消息数 |
-
----
-
-## 执行日志示例
-
-```
-[2026-05-07 08:55:10] [INFO] ============================================================
-[2026-05-07 08:55:10] [INFO]   IDEA SEED - Iterative Document Builder
-[2026-05-07 08:55:10] [INFO]   🌱 Seed: 写一个文学创作工具
-[2026-05-07 08:55:10] [INFO]   📍 Phase: REQUIREMENTS
-[2026-05-07 08:55:10] [INFO]   🎯 Mode: PLAN
-[2026-05-07 08:55:10] [INFO] ============================================================
-[2026-05-07 08:55:10] [INFO]
-[2026-05-07 08:55:10] [INFO]   [1/2] Running Requirements Builder...
-[2026-05-07 09:00:58] [INFO]       → Generated 1456 lines, 28965 chars in 348.9s
-[2026-05-07 09:00:58] [INFO]       → Written to: rounds/requirements/round-1.md
-[2026-05-07 09:01:50] [INFO]   [2/2] Running Requirements Reviewer...
-[2026-05-07 09:01:50] [INFO]       → Review: ❌ NEEDS WORK
-[2026-05-07 09:01:50] [INFO]       → Feedback: [评审反馈内容]
-```
 
 ---
 
@@ -319,7 +321,7 @@ Checkpoint: cp-1
 ### Q: Plan 模式和 Legacy 模式有什么区别？
 
 - **Legacy**：生成技术方案文档（tech-design.md），描述系统架构和技术选型
-- **Plan**：生成执行计划文档（execution-plan.md），包含可执行的任务和验证方式
+- **Plan（V2）**：生成独立可执行的 Plans，每个 Plan 有自己的 Tech-Spec，支持增量更新和状态跟踪
 
 ### Q: 最多能迭代多少轮？
 
@@ -328,7 +330,19 @@ Checkpoint: cp-1
 ### Q: 如何查看 Token 用量？
 
 ```bash
-cat projects/你的项目/.state/token_stats.json
+cat projects/你的项目/.state/token_records.json
+```
+
+### Q: 如何查看项目有多少 Plans？
+
+```bash
+python -m agent.main plans your-project
+```
+
+### Q: 如何更新 Plan 状态？
+
+```bash
+python -m agent.main review plan-001 --stage test --status done
 ```
 
 ---
@@ -337,15 +351,29 @@ cat projects/你的项目/.state/token_stats.json
 
 - [OUTPUT_SPEC.md](./OUTPUT_SPEC.md) - 文档格式规范
 - [DESIGN.md](./DESIGN.md) - 设计文档
+- [PLAN.md](./PLAN.md) - V2 实现计划
 
 ---
 
 ## 更新日志
 
 ### 2026-05-10
-- 修复 Issue #2: Builder 写入文件后验证
-- 修复 Issue #3: previous_feedback 重复出现
-- 确认 Issue #1: 收敛判断逻辑已正确，无需修复
+
+**V2 功能完整实现：**
+- ✅ Plan 数据结构（`agent/plan.py`）
+- ✅ PlanManager CRUD + 循环检测（`agent/plan_manager.py`）
+- ✅ PlanSplitter - Requirements → Plans（`agent/plan_splitter.py`）
+- ✅ TechSpecGenerator - Per-Plan 迭代（`agent/tech_spec_generator.py`）
+- ✅ ReadmeGenerator - 自动更新 README（`agent/readme_generator.py`）
+- ✅ PlanContextCompressor - Plan 级压缩（`agent/plan_compact.py`）
+- ✅ V2Workflow - Orchestrator 扩展（`agent/v2_orchestrator.py`）
+- ✅ CLI 命令（review/plans/append）
+- ✅ Context Compression 集成（compact tool）
+- ✅ Issue #1, #2, #3, #4, #6, #8 已修复/完成
+
+**代码质量：**
+- 121 tests passed
+- 36 files changed, +7502 insertions
 
 ### 2026-05-07
 - 实现 StateManager 增强版（版本/备份/校验/锁）
