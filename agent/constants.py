@@ -80,3 +80,31 @@ ROLE_SYSTEM = {
     "reviewer_req": "You are a requirements review expert.",
     "reviewer_design": "You are a technical review expert.",
 }
+
+# ============================================================================
+# Runtime limits and thresholds
+# ============================================================================
+
+# Subagent: minimum content length to consider a response valid (chars)
+MIN_SUBAGENT_CONTENT_LENGTH = 500
+
+# API call timeout in seconds
+API_TIMEOUT_SECONDS = 600.0
+
+# Heartbeat log interval for long-running API calls in seconds
+HEARTBEAT_INTERVAL_SECONDS = 30.0
+
+# Token tracker: single call token threshold for anomaly detection
+TOKEN_ANOMALY_THRESHOLD = 50000
+
+# Tech spec generator: max review content length sent to reviewer (chars)
+TECH_SPEC_REVIEW_CONTENT_LIMIT = 3000
+
+# Tech spec generator: fallback requirement extraction limit (chars)
+FALLBACK_REQUIREMENTS_LIMIT = 500
+
+# Shell tools: max output size returned to LLM (chars)
+SHELL_OUTPUT_TRUNCATION = 50000
+
+# Bash command timeout in seconds
+BASH_TIMEOUT_SECONDS = 120

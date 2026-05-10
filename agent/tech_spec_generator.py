@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 from agent.plan import Plan
+from agent.constants import TECH_SPEC_REVIEW_CONTENT_LIMIT, FALLBACK_REQUIREMENTS_LIMIT
 from agent.review import ReviewAnalyzer
 from agent.subagent import run_subagent
 
@@ -218,7 +219,7 @@ class TechSpecGenerator:
                 plan_id=plan.plan_id,
                 feature=plan.feature,
                 acceptance_criteria=acceptance_criteria_str,
-                tech_spec=tech_spec_content[:3000],  # Limit for review
+                tech_spec=tech_spec_content[:TECH_SPEC_REVIEW_CONTENT_LIMIT],  # Limit for review
             )
 
             review_result_text, _ = run_subagent(
@@ -284,4 +285,4 @@ class TechSpecGenerator:
             return "\n".join(relevant_lines[:100])  # Limit length
 
         # Fallback: return first 500 chars of requirements
-        return requirements[:500]
+        return requirements[:FALLBACK_REQUIREMENTS_LIMIT]

@@ -30,8 +30,6 @@ def setup_logging() -> None:
 
 def run_seed_mode_args() -> None:
     """Handle seed mode when first arg is the seed text itself."""
-    import argparse
-    from agent.orchestrator import Orchestrator
 
     parser = argparse.ArgumentParser(description="Idea Seed")
     parser.add_argument("seed", help="Seed idea")
@@ -46,13 +44,24 @@ def run_seed_mode_args() -> None:
     seed = args.seed
     if args.interactive:
         seed = input("Enter seed idea: ").strip()
+        if not seed:
+            print("Error: Seed idea cannot be empty")
+            sys.exit(1)
+    elif not args.resume and not seed:
+        print("Error: Seed idea cannot be empty")
+        sys.exit(1)
 
     setup_logging()
     if args.provider:
         os.environ["PROVIDER"] = args.provider
 
     print(f"\nStarting Idea Seed with seed: {seed}")
-    print(f"Mode: {args.mode}\n")
+    if args.provider:
+        print(f"Using provider: {args.provider}")
+    if args.max_rounds:
+        print(f"Max rounds: {args.max_rounds}")
+    print(f"Mode: {args.mode}")
+    print("\nPress Ctrl+C to interrupt...\n")
 
     orchestrator = Orchestrator(
         seed=seed,
@@ -153,43 +162,6 @@ def main() -> None:
         parser.print_help()
         sys.exit(1)
 
-    if args.provider:
-        os.environ["PROVIDER"] = args.provider
-
-    print(f"\nStarting Idea Seed with seed: {seed}\n")
-    if args.provider:
-        print(f"Using provider: {args.provider}")
-    if args.max_rounds:
-        print(f"Max rounds: {args.max_rounds}")
-    print(f"Mode: {args.mode}")
-    print("\nPress Ctrl+C to interrupt...\n")
-
-    orchestrator = Orchestrator(
-        seed=seed,
-        resume=args.resume,
-        max_rounds=args.max_rounds,
-        mode=args.mode,
-    )
-    orchestrator.run()
-
-
-def run_seed_mode(args) -> None:
-    """Run Idea Seed with a seed idea (original behavior)."""
-    setup_logging()
-    _logger = logging.getLogger("idea-seed")
-
-    seed = args.seed
-
-    if args.interactive:
-        seed = input("Enter seed idea: ").strip()
-        if not seed:
-            print("Error: Seed idea cannot be empty")
-            sys.exit(1)
-    elif not args.resume and not seed:
-        print("Error: Seed idea cannot be empty")
-        sys.exit(1)
-
-    # Override provider if specified
     if args.provider:
         os.environ["PROVIDER"] = args.provider
 

@@ -8,16 +8,17 @@ from typing import Any, Optional
 from agent.loop import create_client
 from agent.config import MODEL_ID, MAX_TOKENS, TOKEN_THRESHOLD, KEEP_RECENT
 from agent.compact import micro_compact, compact_if_needed
+from agent.constants import MIN_SUBAGENT_CONTENT_LENGTH, API_TIMEOUT_SECONDS, HEARTBEAT_INTERVAL_SECONDS, SHELL_OUTPUT_TRUNCATION
 from tools.base import TOOL_HANDLERS, TOOL_SCHEMAS
 
 # Minimum content length to consider valid (avoids "(no summary)" cases)
-MIN_CONTENT_LENGTH = 500
+MIN_CONTENT_LENGTH = MIN_SUBAGENT_CONTENT_LENGTH
 
 # API timeout in seconds
-API_TIMEOUT = 600.0  # 10 minutes
+API_TIMEOUT = API_TIMEOUT_SECONDS
 
 # Heartbeat interval for long API calls
-HEARTBEAT_INTERVAL = 30.0  # Log progress every 30 seconds
+HEARTBEAT_INTERVAL = HEARTBEAT_INTERVAL_SECONDS
 
 
 def run_subagent(
@@ -156,7 +157,7 @@ def run_subagent(
                             {
                                 "type": "tool_result",
                                 "tool_use_id": block.id,
-                                "content": str(output)[:50000],
+                                "content": str(output)[:SHELL_OUTPUT_TRUNCATION],
                             }
                         )
                 _logger.info(f"[SUBAGENT] Tool calls: {tool_call_count} | results: {len(results)}")

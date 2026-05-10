@@ -5,6 +5,7 @@ import subprocess
 from pathlib import Path
 
 from agent.config import WORKDIR
+from agent.constants import SHELL_OUTPUT_TRUNCATION, BASH_TIMEOUT_SECONDS
 
 
 def safe_path(p: str) -> Path:
@@ -60,12 +61,12 @@ def run_bash(command: str) -> str:
             cwd=WORKDIR,
             capture_output=True,
             text=True,
-            timeout=120,
+            timeout=BASH_TIMEOUT_SECONDS,
         )
         out = (r.stdout + r.stderr).strip()
-        return out[:50000] if out else "(no output)"
+        return out[:SHELL_OUTPUT_TRUNCATION] if out else "(no output)"
     except subprocess.TimeoutExpired:
-        return "Error: Timeout (120s)"
+        return "Error: Timeout ({BASH_TIMEOUT_SECONDS}s)"
     except Exception as e:
         return f"Error: {e}"
 
@@ -76,7 +77,7 @@ def run_read(path: str, limit: int | None = None) -> str:
         lines = safe_path(path).read_text().splitlines()
         if limit and limit < len(lines):
             lines = lines[:limit] + [f"... ({len(lines) - limit} more)"]
-        return "\n".join(lines)[:50000]
+        return "\n".join(lines)[:SHELL_OUTPUT_TRUNCATION]
     except Exception as e:
         return f"Error: {e}"
 

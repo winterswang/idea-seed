@@ -10,6 +10,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
+from agent.constants import TOKEN_ANOMALY_THRESHOLD
+
 
 # Token pricing per 1M tokens (input, output)
 TOKEN_PRICING = {
@@ -19,7 +21,7 @@ TOKEN_PRICING = {
 }
 
 # Single call anomaly threshold
-SINGLE_CALL_THRESHOLD = 50000
+SINGLE_CALL_THRESHOLD = TOKEN_ANOMALY_THRESHOLD
 
 
 @dataclass

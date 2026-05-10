@@ -9,6 +9,7 @@ from datetime import datetime
 
 from agent.config import WORKDIR
 from agent.state import SessionState, save_state, load_state
+from agent.logger import Logger
 from agent.constants import (
     PHASE_REQUIREMENTS,
     PHASE_TECH_DESIGN,
@@ -152,29 +153,6 @@ def slugify(text: str) -> str:
     hash_suffix = hashlib.md5(text.lower().encode()).hexdigest()[:4]
 
     return "-".join(keywords) + "-" + hash_suffix
-
-
-class Logger:
-    """Simple file logger for tracking execution."""
-
-    def __init__(self, log_path: Path) -> None:
-        self.log_path = log_path
-        self.log_path.parent.mkdir(parents=True, exist_ok=True)
-
-    def log(self, message: str, level: str = "INFO") -> None:
-        """Write log entry with timestamp."""
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        entry = f"[{timestamp}] [{level}] {message}\n"
-        with open(self.log_path, "a") as f:
-            f.write(entry)
-        print(entry.rstrip())
-
-    def log_section(self, title: str) -> None:
-        """Log a section header."""
-        separator = "=" * 60
-        self.log(separator)
-        self.log(title)
-        self.log(separator)
 
 
 class Orchestrator:
