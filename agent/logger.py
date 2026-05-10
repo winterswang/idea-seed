@@ -17,6 +17,8 @@ class Logger:
     def __init__(self, log_path: Path) -> None:
         self.log_path = log_path
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
+        if not self.log_path.exists():
+            self.log_path.write_text("")
 
     def log(self, message: str, level: str = "INFO") -> None:
         """Write log entry with timestamp.
