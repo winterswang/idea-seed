@@ -7,7 +7,7 @@ from typing import Any, Optional
 
 from agent.loop import create_client
 from agent.config import MODEL_ID, MAX_TOKENS, TOKEN_THRESHOLD, KEEP_RECENT
-from agent.compact import micro_compact, compact_if_needed
+from agent.compact import micro_compact, compact_if_needed, estimate_tokens
 from agent.constants import MIN_SUBAGENT_CONTENT_LENGTH, API_TIMEOUT_SECONDS, HEARTBEAT_INTERVAL_SECONDS, SHELL_OUTPUT_TRUNCATION
 from tools.base import TOOL_HANDLERS, TOOL_SCHEMAS
 
@@ -60,6 +60,8 @@ def run_subagent(
 
     client = create_client()
     subagent_start = time.time()
+    zero_token_count = 0
+    total_api_calls = 0
     SUBAGENT_TOTAL_TIMEOUT = 3600  # 1 hour total timeout
     sub_messages = [{"role": "user", "content": prompt}]
     active_tools = tools if tools is not None else TOOL_SCHEMAS
@@ -89,7 +91,8 @@ def run_subagent(
             if compact_enabled:
                 sub_messages = compact_if_needed(sub_messages, threshold=TOKEN_THRESHOLD)
             try:
-                _logger.info(f"[SUBAGENT] Calling API | model={MODEL_ID} | messages={len(sub_messages)} | tools={len(active_tools)} | timeout={API_TIMEOUT}s")
+                est_tokens = estimate_tokens(sub_messages)
+                _logger.info(f"[SUBAGENT] Calling API | model={MODEL_ID} | messages={len(sub_messages)} | est_tokens=~{est_tokens} | tools={len(active_tools)} | timeout={API_TIMEOUT}s")
                 api_start = time.time()
 
                 # Start heartbeat thread for long-running API calls
@@ -148,8 +151,10 @@ def run_subagent(
 
                 # Detect empty response (minimax bug: 0 tokens + stop_reason=None)
                 output_tokens = response.usage.output_tokens if hasattr(response, 'usage') and response.usage else 0
+                total_api_calls += 1
                 if response.stop_reason is None and output_tokens == 0:
-                    _logger.warning("[SUBAGENT] Empty response (0 output tokens) — retrying")
+                    zero_token_count += 1
+                    _logger.warning(f"[SUBAGENT] Empty response (0 output tokens) — retrying [{zero_token_count} 0-token calls, {total_api_calls} total]")
                     raise RuntimeError("Empty response from API (0 output tokens)")
 
                 if response.stop_reason != "tool_use":
@@ -219,6 +224,8 @@ def run_subagent(
 
         # Return summary and usage info - child context is discarded
         _logger.info(f"[SUBAGENT] Completed | content_length={len(content)} chars")
+        if zero_token_count > 0:
+            _logger.warning(f"[SUBAGENT] 0-token rate: {zero_token_count}/{total_api_calls} ({zero_token_count*100//max(total_api_calls,1)}%)")
         return content, usage_info
 
     # Final fallback - return whatever we got

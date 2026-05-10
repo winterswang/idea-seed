@@ -782,13 +782,17 @@ class Orchestrator:
         )
 
         # Subagent writes directly to file, returns confirmation message
-        run_subagent(
-            prompt=prompt,
-            system=BUILDER_REQ_SYSTEM_METHODOLOGY if self.style == "methodology" else BUILDER_REQ_SYSTEM,
-            token_tracker=self.token_tracker,
-            phase="requirements",
-            round_num=self.state.req_round,
-        )
+        try:
+            run_subagent(
+                prompt=prompt,
+                system=BUILDER_REQ_SYSTEM_METHODOLOGY if self.style == "methodology" else BUILDER_REQ_SYSTEM,
+                token_tracker=self.token_tracker,
+                phase="requirements",
+                round_num=self.state.req_round,
+            )
+        except RuntimeError as e:
+            self.logger.log(f"      WARNING: Builder subagent failed: {e}", "WARN")
+            self.logger.log("      Falling back to existing requirements content.", "WARN")
 
     def _builder_design_build(
         self, requirements: str, feedback: str | None, design_path: str

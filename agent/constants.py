@@ -105,6 +105,10 @@ SHELL_OUTPUT_TRUNCATION = 50000
 # Bash command timeout in seconds
 BASH_TIMEOUT_SECONDS = 120
 
+# Model context window (minimax2.7 = 200K). Warn when approaching 80%.
+MODEL_MAX_CONTEXT = 200000
+MODEL_CONTEXT_WARN_RATIO = 0.8
+
 # Tech spec generation: smaller max_tokens to avoid model timeout/0-token issues
 TECH_SPEC_MAX_TOKENS = 32000
 
