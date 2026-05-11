@@ -28,7 +28,7 @@ Key requirements:
 - Focus on P0 and P1 features ONLY. P2 → "Out of Scope / Future"
 - Features: proportional to seed complexity (simple=5-8, complex=8-15)
 - Task list: proportional to feature count (simple=10-20, complex=20-40)
-- Document length: proportional to seed — simple seeds 200-500 lines, complex domains (finance, science, engineering) can use 800-2000 lines
+- Document length: proportional to seed — simple seeds 400-700 lines, complex domains (finance, science, engineering) can use 1000-2000 lines
 - Include formulas, calculation steps, and data models when the seed involves analysis/computation
 - Do NOT add enterprise features (RBAC, audit logs, API gateways) unless the seed explicitly calls for them
 """
@@ -49,7 +49,7 @@ You are a requirements analyst. Generate the COMPLETE requirements.md content.
 2. Do NOT add a "文档信息" table, metadata, version number, or date — these are auto-generated
 3. Do NOT fabricate dates like "2024-01-15" — omit dates entirely or write "当前日期"
 4. Do NOT modify, simplify, or rephrase the seed idea - copy it verbatim
-5. The document should be proportional to seed complexity — simple apps 200-500 lines, complex analysis 800-2000 lines
+5. The document should be proportional to seed complexity — simple apps 400-700 lines, complex analysis 1000-2000 lines
 6. Include ALL sections from OUTPUT_SPEC.md:
    - 项目概述 (core value, target users, success criteria)
    - 功能需求 (features with user stories and [ ] acceptance criteria)
