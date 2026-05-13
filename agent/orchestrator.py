@@ -192,30 +192,55 @@ class Orchestrator:
         # Initialize state manager for enhanced persistence
         self.state_manager = StateManager(self.state_dir)
 
-        # Resume or create new - load state first if resuming
-        state_file = WORKDIR / "projects" / ".state" / "session.json"
+        # Resume: find most recently modified project and load its state
         if resume:
-            # First try the default location
-            if not state_file.exists():
-                # Try to find any session.json in projects
-                for project_dir in (WORKDIR / "projects").iterdir():
-                    if project_dir.is_dir() and project_dir.name != ".state":
-                        candidate = project_dir / ".state" / "session.json"
-                        if candidate.exists():
-                            state_file = candidate
-                            break
+            best_state = None
+            best_mtime = 0
+            projects_dir = WORKDIR / "projects"
 
-            if state_file.exists():
-                loaded = self.state_manager.load_state(state_file)
-                if loaded is not None:
-                    self.state = loaded
-                    # Use seed from loaded state
-                    seed = self.state.seed
-                    self.mode = self.state.mode  # Use mode from saved state
-                else:
-                    raise RuntimeError("Failed to resume: could not load state")
+            for project_dir in sorted(projects_dir.iterdir(), reverse=True):
+                if not project_dir.is_dir():
+                    continue
+
+                state_dir = project_dir / ".state"
+                # New format: versions/session.v*.json
+                versions_dir = state_dir / "versions"
+                if versions_dir.exists():
+                    for vf in sorted(versions_dir.glob("session.v*.json"), reverse=True):
+                        mtime = vf.stat().st_mtime
+                        if mtime > best_mtime:
+                            best_mtime = mtime
+                            best_state = vf
+                            self.project_dir = project_dir
+                            self.project_slug = project_dir.name
+
+                # Old format: session.json
+                sf = state_dir / "session.json"
+                if sf.exists():
+                    mtime = sf.stat().st_mtime
+                    if mtime > best_mtime:
+                        best_mtime = mtime
+                        best_state = sf
+                        self.project_dir = project_dir
+                        self.project_slug = project_dir.name
+
+            if best_state is None:
+                raise RuntimeError(
+                    "Failed to resume: no session state found. "
+                    "Start a new project instead: python -m agent.main '<your seed>'"
+                )
+
+            # Load state from the found project directory
+            self.state_dir = self.project_dir / ".state"
+            self.state_manager = StateManager(self.state_dir)
+            loaded = self.state_manager.load_state()
+
+            if loaded is not None:
+                self.state = loaded
+                seed = self.state.seed
+                self.mode = getattr(self.state, "mode", "legacy")
             else:
-                raise RuntimeError("Failed to resume: no session state found")
+                raise RuntimeError(f"Failed to resume: could not load state from {self.project_dir}")
         elif not seed:
             raise ValueError("seed is required for new sessions")
 
