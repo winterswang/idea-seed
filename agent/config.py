@@ -24,11 +24,34 @@ INBOX_DIR = TEAM_DIR / "inbox"
 ACTIVE_PROVIDER = os.environ.get("PROVIDER", "minimax")
 
 # Provider configurations
+def load_ark_api_key() -> str:
+    """Load ARK coding-plan API key from supported environment aliases."""
+    return os.environ.get("ARK_API_KEY", "") or os.environ.get("ARKCODE_API_KEY", "")
+
+
+def load_ark_base_url() -> str:
+    """Load ARK Anthropic-compatible endpoint without accepting legacy MiniMax hosts."""
+    return os.environ.get("ARK_CODING_BASE_URL", "https://ark.cn-beijing.volces.com/api/coding")
+
+
+def load_ark_model() -> str:
+    """Load ARK model without letting known legacy MiniMax model names override defaults."""
+    ark_model = os.environ.get("ARK_MODEL")
+    if ark_model:
+        return ark_model
+
+    minimax_model = os.environ.get("MINIMAX_MODEL", "")
+    if minimax_model and minimax_model.lower() not in {"minimax2.7", "minimax-2.7"}:
+        return minimax_model
+
+    return "minimax-m3"
+
+
 PROVIDERS = {
     "minimax": {
-        "api_key": os.environ.get("ARK_API_KEY", "") or os.environ.get("MINIMAX_API_KEY", ""),
-        "base_url": os.environ.get("MINIMAX_BASE_URL", "https://ark.cn-beijing.volces.com/api/coding"),
-        "model": os.environ.get("MINIMAX_MODEL", "minimax-m3"),
+        "api_key": load_ark_api_key(),
+        "base_url": load_ark_base_url(),
+        "model": load_ark_model(),
     },
     "aliyun": {
         "api_key": os.environ.get("ALIYUN_API_KEY", ""),
