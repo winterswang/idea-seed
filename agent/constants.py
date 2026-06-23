@@ -109,9 +109,9 @@ BASH_TIMEOUT_SECONDS = 120
 MODEL_MAX_CONTEXT = 200000
 MODEL_CONTEXT_WARN_RATIO = 0.8
 
-# Tech spec generation: smaller max_tokens to avoid model timeout/0-token issues
-# coding plan minimax-m3 maxTokens 上限 8192
-TECH_SPEC_MAX_TOKENS = 8192
+# Tech spec generation: 走 run_subagent（流式调用，无非流式阈值限制）
+# minimax-m3 1M 上下文，技术方案输出较长，取 30000
+TECH_SPEC_MAX_TOKENS = 30000
 
 # Tech spec generation: max tokens (smaller than requirements to avoid model issues)
-TECH_SPEC_MAX_TOKENS = 8192
+TECH_SPEC_MAX_TOKENS = 30000
