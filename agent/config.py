@@ -69,9 +69,9 @@ def get_model() -> str:
 
 # Backwards compatibility - MODEL_ID now points to active provider's model
 MODEL_ID = get_model()
-# minimax-m3 是 1M 上下文模型。主 agent loop(loop.py/team.py)用 anthropic SDK 非流式调用，
-# SDK 在 max_tokens>~21333 时强制要求流式，故主 loop 上限取 20000（实测安全值，可用 MAX_TOKENS 覆盖）。
-MAX_TOKENS = int(os.environ.get("MAX_TOKENS", "20000"))
+# minimax-m3 是 1M 上下文模型。主 agent loop(loop.py/team.py)已改流式调用，
+# 不再受 anthropic SDK 非流式 ~21333 阈值限制，与其他项目统一取 30000。
+MAX_TOKENS = int(os.environ.get("MAX_TOKENS", "30000"))
 
 # Legacy names (kept for compatibility, but now delegated to active provider)
 MINIMAX_API_KEY = get_api_key()

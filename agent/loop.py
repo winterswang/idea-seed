@@ -5,6 +5,7 @@ import time
 from anthropic import Anthropic
 
 from agent.config import MODEL_ID, MAX_TOKENS, get_api_key, get_base_url
+from agent.constants import API_TIMEOUT_SECONDS
 from tools.base import TOOL_HANDLERS, TOOL_SCHEMAS
 
 _logger = logging.getLogger("idea-seed")
@@ -58,13 +59,18 @@ def agent_loop(
         _logger.info(f"[LOOP] Calling API | model={MODEL_ID} | system_len={len(system)} | messages={len(messages)}")
         call_start = time.time()
 
-        response = client.messages.create(
+        # 使用流式调用：anthropic SDK 在 max_tokens>~21333 时强制要求流式。
+        # stream.get_final_message() 返回的 Message 与非流式 create() 完全一致
+        # （content/stop_reason/usage 均在），后续逻辑无需改动。
+        with client.messages.stream(
             model=MODEL_ID,
             system=system,
             messages=messages,
             tools=active_tools,
             max_tokens=max_tokens,
-        )
+            timeout=API_TIMEOUT_SECONDS,
+        ) as stream:
+            response = stream.get_final_message()
 
         call_duration = time.time() - call_start
         _logger.info(f"[LOOP] API response | duration={call_duration:.1f}s | stop_reason={response.stop_reason}")

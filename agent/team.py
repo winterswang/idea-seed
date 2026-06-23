@@ -7,7 +7,7 @@ from pathlib import Path
 
 from agent.loop import create_client
 from agent.config import MODEL_ID, MAX_TOKENS, TEAM_DIR, INBOX_DIR, MAX_ITERATIONS
-from agent.constants import VALID_MSG_TYPES
+from agent.constants import VALID_MSG_TYPES, API_TIMEOUT_SECONDS
 
 
 class MessageBus:
@@ -142,13 +142,17 @@ class TeammateManager:
 
             try:
                 client = create_client()
-                response = client.messages.create(
+                # 流式调用：max_tokens>~21333 时 anthropic SDK 强制流式。
+                # get_final_message() 返回的 Message 与非流式 create() 一致。
+                with client.messages.stream(
                     model=MODEL_ID,
                     system=sys_prompt,
                     messages=messages,
                     tools=tools,
                     max_tokens=MAX_TOKENS,
-                )
+                    timeout=API_TIMEOUT_SECONDS,
+                ) as stream:
+                    response = stream.get_final_message()
             except Exception as e:
                 print(f"  [{name}] API error: {e}")
                 break
