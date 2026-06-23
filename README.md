@@ -78,10 +78,11 @@ pip install -r requirements.txt
 
 ```bash
 PROVIDER=minimax
-MINIMAX_API_KEY=your-key
-MINIMAX_BASE_URL=https://api.minimaxi.com/anthropic
-MINIMAX_MODEL=minimax2.7
-MAX_TOKENS=80000
+ARK_API_KEY=your-key
+# 或：ARKCODE_API_KEY=your-key
+ARK_CODING_BASE_URL=https://ark.cn-beijing.volces.com/api/coding
+ARK_MODEL=minimax-m3
+MAX_TOKENS=30000
 MAX_ROUNDS=10
 ```
 

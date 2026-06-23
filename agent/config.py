@@ -24,11 +24,34 @@ INBOX_DIR = TEAM_DIR / "inbox"
 ACTIVE_PROVIDER = os.environ.get("PROVIDER", "minimax")
 
 # Provider configurations
+def load_ark_api_key() -> str:
+    """Load ARK coding-plan API key from supported environment aliases."""
+    return os.environ.get("ARK_API_KEY", "") or os.environ.get("ARKCODE_API_KEY", "")
+
+
+def load_ark_base_url() -> str:
+    """Load ARK Anthropic-compatible endpoint without accepting legacy MiniMax hosts."""
+    return os.environ.get("ARK_CODING_BASE_URL", "https://ark.cn-beijing.volces.com/api/coding")
+
+
+def load_ark_model() -> str:
+    """Load ARK model without letting known legacy MiniMax model names override defaults."""
+    ark_model = os.environ.get("ARK_MODEL")
+    if ark_model:
+        return ark_model
+
+    minimax_model = os.environ.get("MINIMAX_MODEL", "")
+    if minimax_model and minimax_model.lower() not in {"minimax2.7", "minimax-2.7"}:
+        return minimax_model
+
+    return "minimax-m3"
+
+
 PROVIDERS = {
     "minimax": {
-        "api_key": os.environ.get("MINIMAX_API_KEY", ""),
-        "base_url": os.environ.get("MINIMAX_BASE_URL", "https://api.minimax.chat"),
-        "model": os.environ.get("MINIMAX_MODEL", "minimax2.7"),
+        "api_key": load_ark_api_key(),
+        "base_url": load_ark_base_url(),
+        "model": load_ark_model(),
     },
     "aliyun": {
         "api_key": os.environ.get("ALIYUN_API_KEY", ""),
@@ -69,7 +92,9 @@ def get_model() -> str:
 
 # Backwards compatibility - MODEL_ID now points to active provider's model
 MODEL_ID = get_model()
-MAX_TOKENS = int(os.environ.get("MAX_TOKENS", "80000"))
+# minimax-m3 是 1M 上下文模型。主 agent loop(loop.py/team.py)已改流式调用，
+# 不再受 anthropic SDK 非流式 ~21333 阈值限制，与其他项目统一取 30000。
+MAX_TOKENS = int(os.environ.get("MAX_TOKENS", "30000"))
 
 # Legacy names (kept for compatibility, but now delegated to active provider)
 MINIMAX_API_KEY = get_api_key()
