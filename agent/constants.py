@@ -110,7 +110,8 @@ MODEL_MAX_CONTEXT = 200000
 MODEL_CONTEXT_WARN_RATIO = 0.8
 
 # Tech spec generation: smaller max_tokens to avoid model timeout/0-token issues
-TECH_SPEC_MAX_TOKENS = 32000
+# coding plan minimax-m3 maxTokens 上限 8192
+TECH_SPEC_MAX_TOKENS = 8192
 
 # Tech spec generation: max tokens (smaller than requirements to avoid model issues)
-TECH_SPEC_MAX_TOKENS = 32000
+TECH_SPEC_MAX_TOKENS = 8192

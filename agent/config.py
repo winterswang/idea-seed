@@ -26,9 +26,9 @@ ACTIVE_PROVIDER = os.environ.get("PROVIDER", "minimax")
 # Provider configurations
 PROVIDERS = {
     "minimax": {
-        "api_key": os.environ.get("MINIMAX_API_KEY", ""),
-        "base_url": os.environ.get("MINIMAX_BASE_URL", "https://api.minimax.chat"),
-        "model": os.environ.get("MINIMAX_MODEL", "minimax2.7"),
+        "api_key": os.environ.get("ARK_API_KEY", "") or os.environ.get("MINIMAX_API_KEY", ""),
+        "base_url": os.environ.get("MINIMAX_BASE_URL", "https://ark.cn-beijing.volces.com/api/coding"),
+        "model": os.environ.get("MINIMAX_MODEL", "minimax-m3"),
     },
     "aliyun": {
         "api_key": os.environ.get("ALIYUN_API_KEY", ""),
@@ -69,7 +69,8 @@ def get_model() -> str:
 
 # Backwards compatibility - MODEL_ID now points to active provider's model
 MODEL_ID = get_model()
-MAX_TOKENS = int(os.environ.get("MAX_TOKENS", "80000"))
+# coding plan minimax-m3 maxTokens 上限 8192（可用 MAX_TOKENS 环境变量覆盖）
+MAX_TOKENS = int(os.environ.get("MAX_TOKENS", "8192"))
 
 # Legacy names (kept for compatibility, but now delegated to active provider)
 MINIMAX_API_KEY = get_api_key()
